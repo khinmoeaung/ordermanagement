@@ -19,7 +19,7 @@ A portfolio project: a backend REST API for order management, built on .NET 10. 
 ## 2. Solution layout
 
 ```
-OrderManagement.sln
+OrderManagement.slnx               (the .NET 10 default solution format)
 Directory.Build.props      net10.0, Nullable enable, TreatWarningsAsErrors, ImplicitUsings
 .editorconfig  .gitignore  .env.example  Dockerfile  docker-compose.yml  README.md  CLAUDE.md
 src/
@@ -28,31 +28,31 @@ src/
   OrderManagement.Infrastructure/  -> Application, Domain
   OrderManagement.Api/             -> Application, Infrastructure (Infrastructure is referenced only to register its services)
 tests/
-  OrderManagement.UnitTests/         -> Domain, Application
+  OrderManagement.UnitTests/         -> Domain, Application, Infrastructure (token service only)
   OrderManagement.IntegrationTests/  -> Api
 ```
 
 What each layer contains:
 
 - **Domain:** entities whose methods enforce the business rules, enums (`UserRole`, `OrderStatus`), and domain exceptions (`DomainException`, `NotFoundException`, `ConflictException`). No EF Core or ASP.NET Core references.
-- **Application:** service interfaces and implementations (`IAuthService`, `IProductService`, `ICustomerService`, `IOrderService`), request/response classes, FluentValidation validators, and hand-written mapping extension methods. It also defines the interfaces that Infrastructure implements: the repositories, `IUnitOfWork`, `ITokenService`, `IPasswordHasher`, `ICurrentUser` and `IClock`. Each layer provides an `AddApplication()` / `AddInfrastructure()` method to register its services.
+- **Application:** service interfaces and implementations (`IAuthService`, `IProductService`, `ICustomerService`, `IOrderService`), request/response classes, FluentValidation validators, and hand-written mapping extension methods. It also defines the interfaces that Infrastructure implements: the repositories, `IUnitOfWork`, `ITokenService`, `IPasswordHasher` and `ICurrentUser`. The current time comes from .NET's built-in `TimeProvider`. Each layer provides an `AddApplication()` / `AddInfrastructure()` method to register its services.
 - **Infrastructure:** `AppDbContext` (which also implements `IUnitOfWork`), `IEntityTypeConfiguration` classes, migrations, a repository for each aggregate, the JWT token service, a password hasher wrapping ASP.NET Core's `PasswordHasher<User>` (not the full Identity framework), and the database seeder.
 - **Api:** controllers, the global exception handler, JWT bearer and authorization-policy setup, Swagger with bearer-token support, Serilog, the `/health` endpoint, and `ICurrentUser`, implemented by reading the `HttpContext` claims.
 
 **Packages:** EF Core 10 with a MySQL provider, FluentValidation, Microsoft.AspNetCore.Authentication.JwtBearer, Serilog.AspNetCore, Swagger UI, xUnit, a fluent assertion library, Testcontainers.MySql, and Microsoft.AspNetCore.Mvc.Testing.
 
-**MySQL provider:** use `Pomelo.EntityFrameworkCore.MySql` if it has a stable release supporting EF Core 10. Otherwise use Oracle's `MySql.EntityFrameworkCore`. Confirm which one during planning, before writing any code. Exact package versions are fixed in the implementation plan.
+**MySQL provider:** Oracle's `MySql.EntityFrameworkCore` 10.0.12. Pomelo has no EF Core 10 release (its latest is 9.0.0). Exact package versions are pinned in the implementation plan.
 
 ## 3. Domain model
 
-All IDs are `Guid`, generated with `Guid.CreateVersion7()`. Money is `decimal(18,2)`. Timestamps are UTC and come from `IClock`.
+All IDs are `Guid`, generated with `Guid.CreateVersion7()`. Money is `decimal(18,2)`. Timestamps are UTC and come from `TimeProvider`. Domain methods take the current time (`DateTime utcNow`) as a parameter, so the domain has no dependency on a clock.
 
 | Entity | Fields | Rules |
 |---|---|---|
 | **User** | Id, Email (unique, stored lower-case), PasswordHash, Role, CreatedAt | Registering creates a `Customer` user. One `Admin` is seeded from configuration. |
 | **Customer** | Id, UserId (one-to-one, unique), FullName, Phone, ShippingAddress | Created in the same transaction as the user at registration. |
 | **Product** | Id, Sku (unique), Name, Description, Price, StockQuantity, IsActive, CreatedAt, UpdatedAt | `DeductStock(qty)` throws `ConflictException` if stock would go below 0. `RestoreStock(qty)` adds it back. Price must be greater than 0 and stock at least 0. Deleting sets `IsActive = false`. `StockQuantity` is an EF Core concurrency token. |
-| **Order** | Id, OrderNumber, CustomerId, Status, TotalAmount, CreatedAt, UpdatedAt, Items | Created only through `Order.Create(customerId, lines, clock)`, which needs at least one line and calculates `TotalAmount` from the lines. OrderNumber looks like `ORD-yyyyMMdd-XXXXXX`, where `XXXXXX` is 6 random alphanumeric characters, and is unique. |
+| **Order** | Id, OrderNumber, CustomerId, Status, TotalAmount, CreatedAt, UpdatedAt, Items | Created only through `Order.Create(customerId, lines, utcNow)`, which needs at least one line and calculates `TotalAmount` from the lines. OrderNumber looks like `ORD-yyyyMMdd-XXXXXX`, where `XXXXXX` is 6 random alphanumeric characters, and is unique. |
 | **OrderItem** | Id, OrderId, ProductId, ProductName, UnitPrice, Quantity, LineTotal | ProductName and UnitPrice are copied from the product when the order is placed. Quantity must be at least 1. |
 | **RefreshToken** | Id, UserId, TokenHash (unique), ExpiresAt, CreatedAt, RevokedAt, ReplacedByTokenHash | Active means not revoked and not expired. |
 
@@ -128,7 +128,8 @@ A global `IExceptionHandler` returns RFC 9457 ProblemDetails responses, each inc
 | Bad credentials, or a missing, invalid, expired or revoked token | 401 |
 | Wrong role for the policy | 403 |
 | `NotFoundException` | 404 |
-| `ConflictException`, `DbUpdateConcurrencyException`, a unique-key violation | 409 |
+| `ConflictException`. Infrastructure turns `DbUpdateConcurrencyException` and MySQL duplicate-key errors (1062) into `ConflictException`. | 409 |
+| Any other `DomainException` (an invariant that validation didn't catch) | 400 |
 | Anything else | 500 with a generic message. Details are logged only. |
 
 ## 7. Configuration, startup and logging
