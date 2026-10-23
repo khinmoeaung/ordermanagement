@@ -85,6 +85,28 @@ public class AssistantServiceTests
     }
 
     [Fact]
+    public async Task Tool_use_turn_with_no_calls_returns_fallback()
+    {
+        _model.Then(new ModelTurn(ModelStopReason.ToolUse, "", []));
+        (await Ask(Sut())).Reply.ShouldBe(Fallback);
+        _model.ResultBatches.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Calls_beyond_ten_per_turn_are_not_executed()
+    {
+        var calls = Enumerable.Range(1, 12).Select(i => ListCall("c" + i)).ToArray();
+        _model.Then(Calls(calls)).Then(Answer("done"));
+        await Ask(Sut());
+
+        var batch = _model.ResultBatches.ShouldHaveSingleItem();
+        batch.Count.ShouldBe(12);   // every tool_use still gets a result
+        batch.Take(10).ShouldAllBe(r => !r.IsError);
+        batch.Skip(10).ShouldAllBe(r => r.IsError && r.Content == "Too many tool calls.");
+        batch.Select(r => r.CallId).ShouldBe(calls.Select(c => c.Id));
+    }
+
+    [Fact]
     public async Task Sends_fixed_prompt_and_registered_tools()
     {
         _model.Then(Answer("ok"));
