@@ -5,4 +5,14 @@
     <ProjectReference Include="..\OrderManagement.Domain\OrderManagement.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="MySql.EntityFrameworkCore" />
+    <PackageReference Include="dbup-mysql" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\database\migrations\*.sql" LogicalName="OrderManagement.Migrations.%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>
