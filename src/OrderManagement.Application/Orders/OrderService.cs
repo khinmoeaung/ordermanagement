@@ -45,6 +45,10 @@ public class OrderService(
     public async Task<OrderResponse> GetAsync(Guid id, CancellationToken ct) =>
         (await LoadAccessibleAsync(id, ct)).ToResponse();
 
+    // A missing order and another customer's order fail identically, and the message never echoes the number.
+    public async Task<OrderResponse> GetByNumberAsync(string orderNumber, CancellationToken ct) =>
+        (await EnsureAccessibleAsync(await orders.GetByOrderNumberAsync(orderNumber, ct), Guid.Empty, ct)).ToResponse();
+
     public async Task<PagedResult<OrderResponse>> ListMineAsync(OrderListQuery q, CancellationToken ct)
     {
         var customer = await GetCurrentCustomerAsync(ct);
@@ -106,13 +110,16 @@ public class OrderService(
         return customer ?? throw new NotFoundException("Customer", userId ?? Guid.Empty);
     }
 
-    private async Task<Order> LoadAccessibleAsync(Guid id, CancellationToken ct)
+    private async Task<Order> LoadAccessibleAsync(Guid id, CancellationToken ct) =>
+        await EnsureAccessibleAsync(await orders.GetByIdAsync(id, ct), id, ct);
+
+    private async Task<Order> EnsureAccessibleAsync(Order? order, Guid reportedId, CancellationToken ct)
     {
-        var order = await orders.GetByIdAsync(id, ct) ?? throw new NotFoundException("Order", id);
+        if (order is null) throw new NotFoundException("Order", reportedId);
         if (currentUser.IsAdmin) return order;
 
         var customer = await GetCurrentCustomerAsync(ct);
-        if (order.CustomerId != customer.Id) throw new NotFoundException("Order", id);
+        if (order.CustomerId != customer.Id) throw new NotFoundException("Order", reportedId);
         return order;
     }
 }

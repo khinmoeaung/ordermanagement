@@ -158,6 +158,31 @@ public sealed class PersistenceTests(MySqlFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetByOrderNumber_includes_items()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Product product = Product.Create("SKU-NUM", "Widget", null, 5m, 10, Now);
+        Customer customer = NewCustomer("number@example.com");
+        Order order = Order.Create(customer.Id, [new OrderLine(product, 2)], Now);
+
+        await using (AppDbContext db = fixture.CreateDbContext())
+        {
+            new ProductRepository(db).Add(product);
+            new CustomerRepository(db).Add(customer);
+            new OrderRepository(db).Add(order);
+            await ((IUnitOfWork)db).SaveChangesAsync(ct);
+        }
+
+        await using AppDbContext read = fixture.CreateDbContext();
+        Order? loaded = await new OrderRepository(read).GetByOrderNumberAsync(order.OrderNumber, ct);
+
+        loaded.ShouldNotBeNull();
+        loaded.Id.ShouldBe(order.Id);
+        loaded.OrderItems.Single().Quantity.ShouldBe(2);
+        (await new OrderRepository(read).GetByOrderNumberAsync("ORD-20260101-ZZZZZZ", ct)).ShouldBeNull();
+    }
+
+    [Fact]
     public async Task Product_list_search_and_paging_work()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;

@@ -246,4 +246,45 @@ public class OrderServiceTests
         (await sut.ListAsync(new OrderListQuery(), CancellationToken.None)).TotalCount.ShouldBe(2);
         (await sut.ListAsync(new OrderListQuery { CustomerId = b.Id }, CancellationToken.None)).TotalCount.ShouldBe(1);
     }
+
+    [Fact]
+    public async Task GetByNumber_returns_owners_order()
+    {
+        var a = SeedCustomer("a@x.com");
+        var o = SeedOrder(a, SeedProduct("P1", 1m, 5), 1);
+        var r = await Sut(FakeCurrentUser.Customer(a.UserId)).GetByNumberAsync(o.OrderNumber, CancellationToken.None);
+        r.Id.ShouldBe(o.Id);
+    }
+
+    [Fact]
+    public async Task GetByNumber_other_customers_order_throws_not_found()
+    {
+        var a = SeedCustomer("a@x.com");
+        var b = SeedCustomer("b@x.com");
+        var o = SeedOrder(a, SeedProduct("P1", 1m, 5), 1);
+        await Should.ThrowAsync<NotFoundException>(
+            () => Sut(FakeCurrentUser.Customer(b.UserId)).GetByNumberAsync(o.OrderNumber, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetByNumber_missing_number_throws_not_found()
+    {
+        var a = SeedCustomer("a@x.com");
+        var b = SeedCustomer("b@x.com");
+        var o = SeedOrder(a, SeedProduct("P1", 1m, 5), 1);
+        var sut = Sut(FakeCurrentUser.Customer(b.UserId));
+
+        var missing = await Should.ThrowAsync<NotFoundException>(() => sut.GetByNumberAsync("ORD-20260101-ZZZZZZ", CancellationToken.None));
+        var foreign = await Should.ThrowAsync<NotFoundException>(() => sut.GetByNumberAsync(o.OrderNumber, CancellationToken.None));
+        foreign.Message.ShouldBe(missing.Message);
+    }
+
+    [Fact]
+    public async Task GetByNumber_admin_gets_any_order()
+    {
+        var a = SeedCustomer("a@x.com");
+        var o = SeedOrder(a, SeedProduct("P1", 1m, 5), 1);
+        var r = await Sut(FakeCurrentUser.Admin()).GetByNumberAsync(o.OrderNumber, CancellationToken.None);
+        r.Id.ShouldBe(o.Id);
+    }
 }

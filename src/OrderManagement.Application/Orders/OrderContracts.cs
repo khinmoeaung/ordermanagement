@@ -26,6 +26,9 @@ public interface IOrderRepository
 {
     /// <summary>Includes OrderItems.</summary>
     Task<Order?> GetByIdAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Exact match on the stored (upper-case) number. Includes OrderItems.</summary>
+    Task<Order?> GetByOrderNumberAsync(string orderNumber, CancellationToken ct);
     void Add(Order o);
 
     /// <summary>Newest first. Filters by customerId (when set), Status, From and To (inclusive, on CreatedAt).</summary>
@@ -36,6 +39,7 @@ public interface IOrderService
 {
     Task<OrderResponse> PlaceAsync(PlaceOrderRequest r, CancellationToken ct);
     Task<OrderResponse> GetAsync(Guid id, CancellationToken ct);
+    Task<OrderResponse> GetByNumberAsync(string orderNumber, CancellationToken ct);
     Task<PagedResult<OrderResponse>> ListMineAsync(OrderListQuery q, CancellationToken ct);
     Task<PagedResult<OrderResponse>> ListAsync(OrderListQuery q, CancellationToken ct);
     Task<OrderResponse> ConfirmAsync(Guid id, CancellationToken ct);

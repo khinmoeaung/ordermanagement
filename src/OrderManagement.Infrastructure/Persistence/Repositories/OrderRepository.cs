@@ -11,6 +11,9 @@ public sealed class OrderRepository(AppDbContext context) : IOrderRepository
     public Task<Order?> GetByIdAsync(Guid id, CancellationToken ct) =>
         context.Orders.Include(o => o.OrderItems).FirstOrDefaultAsync(o => o.Id == id, ct);
 
+    public Task<Order?> GetByOrderNumberAsync(string orderNumber, CancellationToken ct) =>
+        context.Orders.Include(o => o.OrderItems).FirstOrDefaultAsync(o => o.OrderNumber == orderNumber, ct);
+
     public void Add(Order o) => context.Orders.Add(o);
 
     public async Task<PagedResult<Order>> ListAsync(OrderListQuery q, Guid? customerId, CancellationToken ct)

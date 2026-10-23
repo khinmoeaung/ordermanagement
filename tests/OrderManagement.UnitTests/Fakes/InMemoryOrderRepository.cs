@@ -11,6 +11,9 @@ public sealed class InMemoryOrderRepository : IOrderRepository
     public Task<Order?> GetByIdAsync(Guid id, CancellationToken ct) =>
         Task.FromResult(Items.FirstOrDefault(o => o.Id == id));
 
+    public Task<Order?> GetByOrderNumberAsync(string orderNumber, CancellationToken ct) =>
+        Task.FromResult(Items.FirstOrDefault(o => o.OrderNumber == orderNumber));
+
     public void Add(Order o) => Items.Add(o);
 
     public Task<PagedResult<Order>> ListAsync(OrderListQuery q, Guid? customerId, CancellationToken ct)
