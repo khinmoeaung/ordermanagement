@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 
+using OrderManagement.Application.Assistant;
 using OrderManagement.Application.Common;
 using OrderManagement.Domain.Common;
 
@@ -18,6 +19,8 @@ public sealed class GlobalExceptionHandler(
         (int status, string detail) = exception switch
         {
             AuthenticationFailedException => (StatusCodes.Status401Unauthorized, exception.Message),
+            AssistantNotConfiguredException => (StatusCodes.Status503ServiceUnavailable, "Assistant is not configured."),
+            AssistantUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Assistant is temporarily unavailable."),
             NotFoundException => (StatusCodes.Status404NotFound, exception.Message),
             ConflictException => (StatusCodes.Status409Conflict, exception.Message),
             DomainException => (StatusCodes.Status400BadRequest, exception.Message),

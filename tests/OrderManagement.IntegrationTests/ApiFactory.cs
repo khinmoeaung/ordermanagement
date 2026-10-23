@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
+using OrderManagement.Application.Assistant;
+using OrderManagement.Infrastructure.Assistant;
 using OrderManagement.Infrastructure.Persistence;
 
 namespace OrderManagement.IntegrationTests;
@@ -24,6 +27,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private readonly MySqlFixture _database = new();
 
     public MySqlFixture Database => _database;
+
+    /// <summary>The fake Claude used by every API test. Reset before each test by <see cref="IntegrationTestBase"/>.</summary>
+    public ScriptedAssistantModel Assistant { get; } = new();
+
+    /// <summary>A factory that uses the real Anthropic adapter (with no API key), for testing the not-configured path.</summary>
+    public WebApplicationFactory<Program> WithRealAssistantModel() =>
+        WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+            s.AddSingleton<IAssistantModel>(sp => ActivatorUtilities.CreateInstance<AnthropicAssistantModel>(sp))));
 
     public async ValueTask InitializeAsync()
     {
@@ -56,8 +67,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 ["Jwt:Audience"] = JwtAudience,
                 ["Jwt:SigningKey"] = JwtSigningKey,
                 ["Seed:AdminEmail"] = AdminEmail,
-                ["Seed:AdminPassword"] = AdminPassword
+                ["Seed:AdminPassword"] = AdminPassword,
+                // Never let a developer's real key reach the API from tests.
+                ["ANTHROPIC_API_KEY"] = ""
             });
         });
+        builder.ConfigureTestServices(s => s.AddSingleton<IAssistantModel>(Assistant));
     }
 }

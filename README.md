@@ -86,9 +86,38 @@ All routes are under `/api/v1`. Errors are RFC 9457 ProblemDetails with a `trace
 | Customers | `GET/PUT /customers/me`; admin: `GET /customers`, `GET /customers/{id}` |
 | Products | `GET /products`, `GET /products/{id}` (public); admin: `POST`, `PUT`, `DELETE` |
 | Orders | `POST /orders`, `GET /orders/my`, `GET /orders/{id}`, `POST /orders/{id}/cancel` and `/complete`; admin: `GET /orders`, `POST /orders/{id}/confirm`, `/ship`, `/deliver` |
+| Assistant | customer: `POST /assistant/chat` (see below) |
 | Health | `GET /health` (no `/api/v1` prefix) |
 
 Order status flow: `Pending -> Confirmed -> Shipped -> Delivered -> Completed`. Cancelling is allowed from `Pending` or `Confirmed` and restores the stock.
+
+## Order assistant (Claude)
+
+A signed-in **customer** can ask about their own orders in plain language. Claude (`claude-opus-5-5`) chooses between two read-only tools, and the backend runs them:
+
+- `get_order_status(orderNumber)`: one order's status, dates, total and items
+- `list_my_orders(status?)`: up to 10 recent orders
+
+```
+POST /api/v1/assistant/chat
+Authorization: Bearer <customer access token>
+{ "message": "What is the status of ORD-20261023-AB12CD?" }
+
+200 { "reply": "Your order ORD-20261023-AB12CD is Pending ..." }
+```
+
+**Security model:** whatever Claude puts in a tool call is treated as untrusted input. Every call passes a backend gate that checks the tool allowlist and the strict arguments, then runs the tool as the user in the JWT. The ownership rule is the same one the REST API uses, so asking about another customer's order number returns "Order not found." exactly like a missing order. Only a restricted result reaches Claude, with no internal IDs, prices per line, address or other customers' data.
+
+**Setup:** set `ANTHROPIC_API_KEY` (in `.env` for Docker, or `dotnet user-secrets set "ANTHROPIC_API_KEY" "<key>" --project src/OrderManagement.Api` locally). Without it the endpoint returns 503 "Assistant is not configured." and the rest of the API works normally. Model and limits are in the `Assistant` section of `appsettings.json`.
+
+**Manual check with a real key:** log in as a customer who has an order, then
+
+```
+curl -s http://localhost:5080/api/v1/assistant/chat -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" -d '{"message":"What are my recent orders?"}'
+```
+
+The automated tests never call Claude: they use a scripted fake model.
 
 ## Troubleshooting
 

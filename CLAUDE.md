@@ -41,6 +41,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Empty 401/403/404 responses also become ProblemDetails through `UseStatusCodePages`. A customer asking for another customer's order gets 404, not 403.
 
+## Assistant (Claude tool calling)
+
+- `POST /api/v1/assistant/chat` (CustomerOnly). The loop and the gate are in `Application/Assistant` (`AssistantService`, `ToolExecutor`, `Tools/`). The Anthropic SDK is used only in `Infrastructure/Assistant/AnthropicAssistantModel.cs`, behind `IAssistantModel`.
+- Model input is untrusted. Tools take no user ID, customer ID or role. They call services that read the caller from `ICurrentUser`, and every call goes through `ToolExecutor` (allowlist, then strict input validation, then a restricted DTO). Never return entities or full response DTOs to the model.
+- To add a tool: implement `IAssistantTool` with a JSON schema (`additionalProperties: false`), validate the input with `ToolInput`, return a small result record, register it in `AddApplication()`, and add unit tests plus a cross-customer integration test.
+- The API key comes from the `ANTHROPIC_API_KEY` configuration key. When it's missing, the endpoint returns 503. Settings are in the `Assistant` section.
+- Tests never call Claude. Unit tests use `FakeAssistantModel`, adapter tests use `StubAnthropicServer`, and API tests script `ApiFactory.Assistant` (`ScriptedAssistantModel`).
+
 ## Tests
 
 - Unit tests do no I/O; services run against in-memory fakes in `tests/OrderManagement.UnitTests/Fakes`.
