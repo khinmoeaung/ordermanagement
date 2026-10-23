@@ -93,7 +93,7 @@ Order status flow: `Pending -> Confirmed -> Shipped -> Delivered -> Completed`. 
 
 ## Order assistant (Claude)
 
-A signed-in **customer** can ask about their own orders in plain language. Claude (`claude-opus-5-5`) chooses between two read-only tools, and the backend runs them:
+A signed-in **customer** can ask about their own orders in plain language. Claude (`claude-haiku-5-5` by default, set in `Assistant:Model`) chooses between two read-only tools, and the backend runs them:
 
 - `get_order_status(orderNumber)`: one order's status, dates, total and items
 - `list_my_orders(status?)`: up to 10 recent orders
