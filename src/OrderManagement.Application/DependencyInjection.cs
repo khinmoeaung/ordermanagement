@@ -1,6 +1,7 @@
 using FluentValidation;
 using OrderManagement.Application.Auth;
 using OrderManagement.Application.Customers;
+using OrderManagement.Application.Orders;
 using OrderManagement.Application.Products;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -16,6 +17,7 @@ public static class DependencyInjection
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<ICustomerService, CustomerService>();
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IOrderService, OrderService>();
         return services;
     }
 }
