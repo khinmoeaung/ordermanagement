@@ -1,4 +1,6 @@
 using FluentValidation;
+using OrderManagement.Application.Assistant;
+using OrderManagement.Application.Assistant.Tools;
 using OrderManagement.Application.Auth;
 using OrderManagement.Application.Customers;
 using OrderManagement.Application.Orders;
@@ -18,6 +20,13 @@ public static class DependencyInjection
         services.AddScoped<ICustomerService, CustomerService>();
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IOrderService, OrderService>();
+
+        services.AddScoped<IAssistantTool, GetOrderStatusTool>();
+        services.AddScoped<IAssistantTool, ListMyOrdersTool>();
+        services.AddScoped<ToolExecutor>();
+        // Infrastructure re-registers this with MaxToolRounds from configuration.
+        services.AddScoped<IAssistantService>(sp =>
+            new AssistantService(sp.GetRequiredService<IAssistantModel>(), sp.GetRequiredService<ToolExecutor>()));
         return services;
     }
 }
