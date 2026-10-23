@@ -51,7 +51,7 @@ The SQL schema is the source of truth. The EF Core model is generated from it, n
 
 - **Schema scripts:** `database/migrations/NNNN_<name>.sql`, numbered from `0001_initial_schema.sql`. A script is never edited once committed; every change is a new script. Tables and columns use `snake_case` (`order_items.unit_price`). The schema enforces what it can: primary and foreign keys (`RESTRICT`, except `order_items → orders` which is `CASCADE`), the unique keys from §3, `CHECK (price > 0)`, `CHECK (stock_quantity >= 0)`, `CHECK (quantity >= 1)`, `DECIMAL(18,2)` money, `CHAR(36)` IDs, `VARCHAR` status and role columns, `DATETIME(6)` times, InnoDB with `utf8mb4`.
 - **Applying scripts:** DbUp runs the scripts (embedded resources of the Infrastructure project) in order and records each one in a `schemaversions` table, so each script runs once. It runs at startup in the `Development` and `Docker` environments, and once per integration-test run. There are no EF Core migrations.
-- **Generating the model:** `scripts/scaffold.ps1` starts a throwaway `mysql:8.4` container, applies the scripts with DbUp, and runs `dotnet ef dbcontext scaffold` with these settings:
+- **Generating the model:** `scripts/scaffold.ps1` starts a throwaway `mysql:8.4` container, pipes the scripts into the container's `mysql` client in name order, and runs `dotnet ef dbcontext scaffold` with these settings:
   - generated entities go to `src/OrderManagement.Domain/Entities/` (namespace `OrderManagement.Domain.Entities`), and the `AppDbContext` goes to `src/OrderManagement.Infrastructure/Persistence/`
   - mapping uses the fluent API only (no attributes), `snake_case` names become `PascalCase`, and the DbContext gets no hard-coded connection string
   - the `schemaversions` table is excluded
