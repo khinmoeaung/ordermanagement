@@ -72,6 +72,59 @@ public sealed class PersistenceTests(MySqlFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Concurrent_cancel_and_ship_throws_conflict()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        Product product = Product.Create("SKU-RACE", "Race", null, 10m, 10, Now);
+        Customer customer = NewCustomer("race@example.com");
+        Order order = Order.Create(customer.Id, [new OrderLine(product, 1)], Now);
+        order.Confirm(Now);
+        await using (AppDbContext seed = fixture.CreateDbContext())
+        {
+            new ProductRepository(seed).Add(product);
+            new CustomerRepository(seed).Add(customer);
+            new OrderRepository(seed).Add(order);
+            await ((IUnitOfWork)seed).SaveChangesAsync(ct);
+        }
+
+        await using AppDbContext first = fixture.CreateDbContext();
+        await using AppDbContext second = fixture.CreateDbContext();
+        Order cancelCopy = (await new OrderRepository(first).GetByIdAsync(order.Id, ct))!;
+        Order shipCopy = (await new OrderRepository(second).GetByIdAsync(order.Id, ct))!;
+
+        cancelCopy.Cancel(Now);
+        await ((IUnitOfWork)first).SaveChangesAsync(ct);
+
+        shipCopy.Ship(Now);
+        await Should.ThrowAsync<ConflictException>(() => ((IUnitOfWork)second).SaveChangesAsync(ct));
+    }
+
+    [Fact]
+    public async Task Concurrent_refresh_token_revoke_throws_conflict()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        User user = NewUser("tokenrace@example.com");
+        RefreshToken token = RefreshToken.Create(user.Id, "race-hash", Now.AddDays(1), Now);
+        await using (AppDbContext seed = fixture.CreateDbContext())
+        {
+            new UserRepository(seed).Add(user);
+            new RefreshTokenRepository(seed).Add(token);
+            await ((IUnitOfWork)seed).SaveChangesAsync(ct);
+        }
+
+        await using AppDbContext first = fixture.CreateDbContext();
+        await using AppDbContext second = fixture.CreateDbContext();
+        RefreshToken a = (await new RefreshTokenRepository(first).GetByHashAsync("race-hash", ct))!;
+        RefreshToken b = (await new RefreshTokenRepository(second).GetByHashAsync("race-hash", ct))!;
+
+        a.Revoke(Now);
+        await ((IUnitOfWork)first).SaveChangesAsync(ct);
+
+        b.Revoke(Now);
+        await Should.ThrowAsync<ConflictException>(() => ((IUnitOfWork)second).SaveChangesAsync(ct));
+    }
+
+    [Fact]
     public async Task Order_with_items_round_trips_via_repository()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;

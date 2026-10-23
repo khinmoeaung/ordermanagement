@@ -29,9 +29,10 @@ The SQL schema is the source of truth, and the EF Core model is generated from i
 To change the schema:
 
 1. Add `database/migrations/NNNN_description.sql`.
-2. Run `scripts/scaffold.ps1` (needs Docker; it starts a throwaway MySQL container and regenerates the model).
-3. Update the behavior partials and tests.
-4. Commit the script and the regenerated code together.
+2. If the script adds a new table, also add it to the `--table` list in `scripts/scaffold.ps1` (the list is hardcoded, so a missing table is silently left out of the model).
+3. Run `scripts/scaffold.ps1` (needs Docker; it starts a throwaway MySQL container and regenerates the model).
+4. Update the behavior partials and tests.
+5. Commit the script and the regenerated code together.
 
 ## Run with Docker
 
@@ -56,7 +57,7 @@ dotnet user-secrets set "Seed:AdminPassword" "<admin password>" --project src/Or
 dotnet run --project src/OrderManagement.Api
 ```
 
-The `Development` environment applies the schema and seeds the data on startup. The database itself must already exist, or the user must be allowed to create it.
+The `Development` environment applies the schema and seeds the data on startup. The database itself must already exist: DbUp does not create it. Docker Compose creates it through `MYSQL_DATABASE`; locally, create it first (for example `CREATE DATABASE ordermanagement;`).
 
 ## Tests
 

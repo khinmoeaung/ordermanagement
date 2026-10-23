@@ -50,6 +50,15 @@ public sealed class OrderEndpointsTests(ApiFactory factory) : IntegrationTestBas
     }
 
     [Fact]
+    public async Task Null_item_returns_400()
+    {
+        RegisteredCustomer customer = await Api.RegisterCustomerAsync();
+        using StringContent body = new("{\"items\":[null]}", System.Text.Encoding.UTF8, "application/json");
+        HttpResponseMessage response = await customer.Client.PostAsync("/api/v1/orders", body, Ct);
+        await Problem.AssertAsync(response, HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Full_lifecycle_to_completed()
     {
         HttpClient admin = await Api.LoginAdminAsync();

@@ -68,6 +68,14 @@ public class ProductValidatorTests
         _list.TestValidate(new ProductListQuery { Page = page, PageSize = size }).IsValid.ShouldBeFalse();
 
     [Fact]
+    public void Huge_page_rejected() =>
+        _list.TestValidate(new ProductListQuery { Page = 1_000_001, PageSize = 100 }).ShouldHaveValidationErrorFor(x => x.Page);
+
+    [Fact]
+    public void Max_page_accepted() =>
+        _list.TestValidate(new ProductListQuery { Page = 1_000_000, PageSize = 100 }).ShouldNotHaveAnyValidationErrors();
+
+    [Fact]
     public void Page_bounds_accepted() =>
         _list.TestValidate(new ProductListQuery { Page = 1, PageSize = 100 }).ShouldNotHaveAnyValidationErrors();
 

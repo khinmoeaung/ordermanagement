@@ -95,6 +95,18 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task Refresh_losing_rotation_race_fails_with_invalid_token()
+    {
+        var sut = Sut();
+        await sut.RegisterAsync(Reg(), Ct);
+        _uow.ThrowOnNextSave = new ConflictException("race");
+
+        var ex = await Should.ThrowAsync<AuthenticationFailedException>(
+            () => sut.RefreshAsync(new RefreshRequest("rt-1"), Ct));
+        ex.Message.ShouldBe("Invalid refresh token.");
+    }
+
+    [Fact]
     public async Task Refresh_with_revoked_token_revokes_all_and_fails()
     {
         var sut = Sut();

@@ -27,6 +27,13 @@ public class OrderValidatorTests
         _place.TestValidate(Req(new(id, 1), new(id, 2))).ShouldHaveValidationErrorFor(x => x.Items);
     }
 
+    [Fact]
+    public void Null_item_rejected_without_throwing()
+    {
+        var result = _place.TestValidate(new PlaceOrderRequest([null!]));
+        result.IsValid.ShouldBeFalse();
+    }
+
     [Theory, InlineData(0), InlineData(1001)]
     public void Quantity_out_of_range_rejected(int q) =>
         _place.TestValidate(Req(new PlaceOrderItem(Guid.NewGuid(), q))).IsValid.ShouldBeFalse();

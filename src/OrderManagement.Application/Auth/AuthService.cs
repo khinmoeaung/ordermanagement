@@ -76,7 +76,16 @@ public class AuthService(
         var response = IssueTokens(user, now, out var replacement);
         old.Revoke(now, replacement.TokenHash);
         refreshTokens.Add(replacement);
-        await unitOfWork.SaveChangesAsync(ct);
+        try
+        {
+            await unitOfWork.SaveChangesAsync(ct);
+        }
+        catch (ConflictException)
+        {
+            // A concurrent request already rotated this token.
+            throw new AuthenticationFailedException(InvalidRefreshToken);
+        }
+
         return response;
     }
 

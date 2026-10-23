@@ -36,9 +36,12 @@ public partial class AppDbContext : IUnitOfWork
             entity.Property(e => e.Role).HasConversion<string>();
         });
 
+        modelBuilder.Entity<RefreshToken>().Property(e => e.RevokedAt).IsConcurrencyToken();
+
         modelBuilder.Entity<Order>(entity =>
         {
             entity.Property(e => e.Status).HasConversion<string>();
+            entity.Property(e => e.Status).IsConcurrencyToken();
         });
 
         foreach (IMutableEntityType entityType in modelBuilder.Model.GetEntityTypes())

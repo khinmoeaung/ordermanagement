@@ -14,6 +14,13 @@ public sealed class ProductEndpointsTests(ApiFactory factory) : IntegrationTestB
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     [Fact]
+    public async Task Huge_page_returns_400()
+    {
+        HttpResponseMessage response = await Client.GetAsync("/api/v1/products?page=2147483647&pageSize=100", Ct);
+        await Problem.AssertAsync(response, HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
     public async Task Anonymous_can_list_active_products_only()
     {
         HttpClient admin = await Api.LoginAdminAsync();
