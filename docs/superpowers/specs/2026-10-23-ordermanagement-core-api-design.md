@@ -7,7 +7,7 @@
 
 A portfolio project: a backend REST API for order management, built on .NET 10. It should show a clean layered monolith, JWT authentication with refresh tokens, a domain with real business rules, and thorough automated tests.
 
-**In scope:** the layered solution, authentication (register, login, refresh, logout), Admin and Customer roles, product and customer management, orders with a status workflow and stock control, MySQL through EF Core with migrations, Swagger, Serilog, unit and integration tests, and Docker / Docker Compose.
+**In scope:** the layered solution, authentication (register, login, refresh, logout), Admin and Customer roles, product and customer management, orders with a status workflow and stock control, MySQL with EF Core, database-first (§2a), Swagger, Serilog, unit and integration tests, and Docker / Docker Compose.
 
 **Out of scope (later projects):** GitHub Actions and GHCR, LLM and AI-agent integrations, email and notifications (so no email confirmation or password reset), file storage, webhooks, a Staff role, payments, and any frontend.
 
@@ -22,6 +22,8 @@ A portfolio project: a backend REST API for order management, built on .NET 10. 
 OrderManagement.slnx               (the .NET 10 default solution format)
 Directory.Build.props      net10.0, Nullable enable, TreatWarningsAsErrors, ImplicitUsings
 .editorconfig  .gitignore  .env.example  Dockerfile  docker-compose.yml  README.md  CLAUDE.md
+database/migrations/       numbered SQL scripts: the schema's source of truth (§2a)
+scripts/scaffold.ps1       regenerates the EF model from the database
 src/
   OrderManagement.Domain/          no project or package dependencies
   OrderManagement.Application/     -> Domain
@@ -34,14 +36,34 @@ tests/
 
 What each layer contains:
 
-- **Domain:** entities whose methods enforce the business rules, enums (`UserRole`, `OrderStatus`), and domain exceptions (`DomainException`, `NotFoundException`, `ConflictException`). No EF Core or ASP.NET Core references.
+- **Domain:** entities in `Entities/`. Each is a generated `partial` class (scaffolded from the database, no attributes) plus a hand-written `<Entity>.Behavior.cs` partial with the factory and rule methods. Also enums (`UserRole`, `OrderStatus`), and domain exceptions (`DomainException`, `NotFoundException`, `ConflictException`). No EF Core or ASP.NET Core references.
 - **Application:** service interfaces and implementations (`IAuthService`, `IProductService`, `ICustomerService`, `IOrderService`), request/response classes, FluentValidation validators, and hand-written mapping extension methods. It also defines the interfaces that Infrastructure implements: the repositories, `IUnitOfWork`, `ITokenService`, `IPasswordHasher` and `ICurrentUser`. The current time comes from .NET's built-in `TimeProvider`. Each layer provides an `AddApplication()` / `AddInfrastructure()` method to register its services.
-- **Infrastructure:** `AppDbContext` (which also implements `IUnitOfWork`), `IEntityTypeConfiguration` classes, migrations, a repository for each aggregate, the JWT token service, a password hasher wrapping ASP.NET Core's `PasswordHasher<User>` (not the full Identity framework), and the database seeder.
+- **Infrastructure:** the generated `AppDbContext` plus a hand-written `AppDbContext.Partial.cs` (which implements `IUnitOfWork` and adds the concurrency token in `OnModelCreatingPartial`), the embedded SQL scripts and the DbUp runner, the customized EF scaffolding templates, a repository for each aggregate, the JWT token service, a password hasher wrapping ASP.NET Core's `PasswordHasher<User>` (not the full Identity framework), and the database seeder.
 - **Api:** controllers, the global exception handler, JWT bearer and authorization-policy setup, Swagger with bearer-token support, Serilog, the `/health` endpoint, and `ICurrentUser`, implemented by reading the `HttpContext` claims.
 
-**Packages:** EF Core 10 with a MySQL provider, FluentValidation, Microsoft.AspNetCore.Authentication.JwtBearer, Serilog.AspNetCore, Swagger UI, xUnit, a fluent assertion library, Testcontainers.MySql, and Microsoft.AspNetCore.Mvc.Testing.
+**Packages:** EF Core 10 with a MySQL provider, DbUp (`dbup-mysql` 6.1.0), FluentValidation, Microsoft.AspNetCore.Authentication.JwtBearer, Serilog.AspNetCore, Swagger UI, xUnit, a fluent assertion library, Testcontainers.MySql, and Microsoft.AspNetCore.Mvc.Testing.
 
 **MySQL provider:** Oracle's `MySql.EntityFrameworkCore` 10.0.12. Pomelo has no EF Core 10 release (its latest is 9.0.0). Exact package versions are pinned in the implementation plan.
+
+## 2a. Database-first workflow
+
+The SQL schema is the source of truth. The EF Core model is generated from it, never the other way round.
+
+- **Schema scripts:** `database/migrations/NNNN_<name>.sql`, numbered from `0001_initial_schema.sql`. A script is never edited once committed; every change is a new script. Tables and columns use `snake_case` (`order_items.unit_price`). The schema enforces what it can: primary and foreign keys (`RESTRICT`, except `order_items → orders` which is `CASCADE`), the unique keys from §3, `CHECK (price > 0)`, `CHECK (stock_quantity >= 0)`, `CHECK (quantity >= 1)`, `DECIMAL(18,2)` money, `CHAR(36)` IDs, `VARCHAR` status and role columns, `DATETIME(6)` times, InnoDB with `utf8mb4`.
+- **Applying scripts:** DbUp runs the scripts (embedded resources of the Infrastructure project) in order and records each one in a `schemaversions` table, so each script runs once. It runs at startup in the `Development` and `Docker` environments, and once per integration-test run. There are no EF Core migrations.
+- **Generating the model:** `scripts/scaffold.ps1` starts a throwaway `mysql:8.4` container, applies the scripts with DbUp, and runs `dotnet ef dbcontext scaffold` with these settings:
+  - generated entities go to `src/OrderManagement.Domain/Entities/` (namespace `OrderManagement.Domain.Entities`), and the `AppDbContext` goes to `src/OrderManagement.Infrastructure/Persistence/`
+  - mapping uses the fluent API only (no attributes), `snake_case` names become `PascalCase`, and the DbContext gets no hard-coded connection string
+  - the `schemaversions` table is excluded
+- **Customized templates** (`dotnet new ef-templates`, checked into Infrastructure under `CodeTemplates/EFCore/`) make the generated code match this design:
+  - `CHAR(36)` columns named `id` or ending in `_id` become `Guid`
+  - `orders.status` becomes `OrderStatus` and `users.role` becomes `UserRole`, stored as strings
+  - entity classes are `partial`, and every generated file starts with an `<auto-generated>` header
+- **Hand-written partials** that scaffolding never overwrites:
+  - `Domain/Entities/<Entity>.Behavior.cs`: the factory methods and rule methods from §3
+  - `Infrastructure/Persistence/AppDbContext.Partial.cs`: marks `Product.StockQuantity` as a concurrency token in `OnModelCreatingPartial`, and implements `IUnitOfWork`
+- **Convention:** generated setters are public. Application services change entities only through the behavior methods, and code review enforces this.
+- **Changing the schema:** add a new SQL script, run `scripts/scaffold.ps1`, update the behavior partials and tests, then commit the script and the regenerated code together.
 
 ## 3. Domain model
 
@@ -136,7 +158,7 @@ A global `IExceptionHandler` returns RFC 9457 ProblemDetails responses, each inc
 
 - Typed, validated options classes (checked at startup): `JwtOptions` (Issuer, Audience, SigningKey of at least 32 bytes, AccessTokenMinutes, RefreshTokenDays) and `SeedOptions` (AdminEmail, AdminPassword). The app refuses to start if any are invalid.
 - Secrets (the JWT signing key, the `ConnectionStrings:Default` connection string and the admin password) come from user-secrets in Development and from environment variables in Docker. `.env.example` documents them, and `.env` is git-ignored.
-- Migrations run on startup in the `Development` and `Docker` environments.
+- DbUp applies any new schema scripts on startup in the `Development` and `Docker` environments (§2a).
 - The seeder creates the admin user and 5 sample products if they don't already exist. Running it again changes nothing.
 - Serilog writes structured logs to the console, one summary line per request. Passwords, tokens and `Authorization` headers are never logged.
 - Swagger UI is enabled in the `Development` and `Docker` environments, with a bearer-token input.
@@ -161,4 +183,4 @@ Development is test-first: write a failing test, make it pass, then tidy up.
 
 - `Dockerfile`: a multi-stage build that compiles with the .NET 10 SDK image and runs on the `aspnet:10.0` image as a non-root user, on port 8080.
 - `docker-compose.yml`: `mysql:8.4` (utf8mb4, a named volume, a health check) and `api` (waits until MySQL is healthy, `ASPNETCORE_ENVIRONMENT=Docker`, settings from `.env`), with port 8080 exposed.
-- The README documents: `docker compose up --build`, running locally with `dotnet run` plus user-secrets, `dotnet test`, and running a single test with `dotnet test --filter "FullyQualifiedName~<Name>"`.
+- The README documents: `docker compose up --build`, running locally with `dotnet run` plus user-secrets, `dotnet test`, running a single test with `dotnet test --filter "FullyQualifiedName~<Name>"`, and the schema-change workflow from §2a.
