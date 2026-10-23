@@ -15,7 +15,7 @@ public static class Problem
     public static async Task<JsonElement> AssertAsync(HttpResponseMessage response, HttpStatusCode expected)
     {
         response.StatusCode.ShouldBe(expected);
-        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        response.Content.Headers.ContentType.ShouldNotBeNull().MediaType.ShouldBe("application/problem+json");
 
         string json = await response.Content.ReadAsStringAsync();
         JsonElement body = JsonDocument.Parse(json).RootElement.Clone();

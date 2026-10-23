@@ -14,6 +14,7 @@ public abstract class IntegrationTestBase(ApiFactory factory) : IAsyncLifetime
 
     /// <summary>An unauthenticated client.</summary>
     protected HttpClient Client { get; } = factory.CreateClient();
+    // Every other client comes from Api, which disposes them all.
 
     public virtual async ValueTask InitializeAsync()
     {
@@ -23,6 +24,7 @@ public abstract class IntegrationTestBase(ApiFactory factory) : IAsyncLifetime
     public virtual ValueTask DisposeAsync()
     {
         Client.Dispose();
+        Api.Dispose();
         GC.SuppressFinalize(this);
         return ValueTask.CompletedTask;
     }

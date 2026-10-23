@@ -17,17 +17,42 @@ namespace OrderManagement.IntegrationTests;
 public sealed record RegisteredCustomer(HttpClient Client, AuthResponse Auth, string Email, string Password, Guid UserId);
 
 /// <summary>Test helpers that drive the API (or, where no endpoint exists yet, the database) to set up state.</summary>
-public sealed class TestClient(ApiFactory factory)
+public sealed class TestClient(ApiFactory factory) : IDisposable
 {
     public const string CustomerPassword = "Customer123";
 
-    /// <summary>An unauthenticated client.</summary>
-    public HttpClient CreateAnonymous() => factory.CreateClient();
+    private readonly List<HttpClient> _clients = [];
+
+    /// <summary>An unauthenticated client. It is disposed with this helper.</summary>
+    public HttpClient CreateAnonymous()
+    {
+        HttpClient client = factory.CreateClient();
+        lock (_clients)
+        {
+            _clients.Add(client);
+        }
+
+        return client;
+    }
+
+    /// <summary>Disposes every client this helper created.</summary>
+    public void Dispose()
+    {
+        lock (_clients)
+        {
+            foreach (HttpClient client in _clients)
+            {
+                client.Dispose();
+            }
+
+            _clients.Clear();
+        }
+    }
 
     /// <summary>A client that sends <paramref name="accessToken"/> as a Bearer token.</summary>
     public HttpClient CreateAuthenticated(string accessToken)
     {
-        HttpClient client = factory.CreateClient();
+        HttpClient client = CreateAnonymous();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         return client;
     }
