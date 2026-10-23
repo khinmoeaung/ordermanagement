@@ -12,7 +12,7 @@ A portfolio project: a backend REST API for order management, built on .NET 10. 
 **Out of scope (later projects):** GitHub Actions and GHCR, LLM and AI-agent integrations, email and notifications (so no email confirmation or password reset), file storage, webhooks, a Staff role, payments, and any frontend.
 
 **Success criteria:**
-- `docker compose up --build` starts the API and MySQL. Swagger at `http://localhost:8080/swagger` lets you register, log in, authorize with the token and run the whole order lifecycle.
+- `docker compose up --build` starts the API and MySQL. Swagger at `http://localhost:5080/swagger` lets you register, log in, authorize with the token and run the whole order lifecycle.
 - `dotnet test` passes all unit and integration tests. The integration tests need Docker.
 - Every business rule in this document is covered by at least one test.
 
@@ -182,5 +182,5 @@ Development is test-first: write a failing test, make it pass, then tidy up.
 ## 9. Docker
 
 - `Dockerfile`: a multi-stage build that compiles with the .NET 10 SDK image and runs on the `aspnet:10.0` image as a non-root user, on port 8080.
-- `docker-compose.yml`: `mysql:8.4` (utf8mb4, a named volume, a health check) and `api` (waits until MySQL is healthy, `ASPNETCORE_ENVIRONMENT=Docker`, settings from `.env`), with port 8080 exposed.
+- `docker-compose.yml`: `mysql:8.4` (utf8mb4, a named volume, a health check) and `api` (waits until MySQL is healthy, `ASPNETCORE_ENVIRONMENT=Docker`, settings from `.env`), with container port 8080 published on host port 5080.
 - The README documents: `docker compose up --build`, running locally with `dotnet run` plus user-secrets, `dotnet test`, running a single test with `dotnet test --filter "FullyQualifiedName~<Name>"`, and the schema-change workflow from §2a.
