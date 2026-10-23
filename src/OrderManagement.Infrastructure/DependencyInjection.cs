@@ -1,12 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
+using OrderManagement.Application.Assistant;
 using OrderManagement.Application.Auth;
 using OrderManagement.Application.Common;
 using OrderManagement.Application.Customers;
 using OrderManagement.Application.Orders;
 using OrderManagement.Application.Products;
+using OrderManagement.Infrastructure.Assistant;
 using OrderManagement.Infrastructure.Persistence;
 using OrderManagement.Infrastructure.Persistence.Repositories;
 using OrderManagement.Infrastructure.Security;
@@ -38,6 +41,16 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(SeedOptions.SectionName))
             .Validate(SeedOptions.Validate, "Invalid Seed settings.")
             .ValidateOnStart();
+
+        services.AddOptions<AssistantOptions>()
+            .Bind(configuration.GetSection(AssistantOptions.SectionName))
+            .Validate(AssistantOptions.Validate, "Invalid Assistant settings.")
+            .ValidateOnStart();
+        services.AddSingleton<IAssistantModel, AnthropicAssistantModel>();
+        services.AddScoped<IAssistantService>(sp => new AssistantService(
+            sp.GetRequiredService<IAssistantModel>(),
+            sp.GetRequiredService<ToolExecutor>(),
+            sp.GetRequiredService<IOptions<AssistantOptions>>().Value.MaxToolRounds));
 
         return services;
     }

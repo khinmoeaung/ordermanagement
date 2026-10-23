@@ -22,6 +22,7 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="Testcontainers.MySql" Version="4.16.0" />
+    <PackageVersion Include="Anthropic" Version="13.1.0" />
     <PackageVersion Include="dbup-mysql" Version="6.1.0" />
   </ItemGroup>
 </Project>
