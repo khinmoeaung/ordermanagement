@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using OllamaSharp;
 using OrderManagement.Application.Policies;
 using OrderManagement.Infrastructure.Assistant;
+using Qdrant.Client;
 
 namespace OrderManagement.Infrastructure.Policies;
 
@@ -31,6 +32,19 @@ public static class PolicyInfrastructureExtensions
         services.AddSingleton<IPolicyAnswerGenerator>(sp => new PolicyAnswerGenerator(
             sp.GetRequiredService<ChatClientFactory>(),
             sp.GetRequiredService<IOptions<AssistantOptions>>().Value.MaxTokens));
+
+        services.AddSingleton(sp =>
+        {
+            var qdrant = sp.GetRequiredService<IOptions<PolicyOptions>>().Value.Qdrant;
+            return new QdrantClient(
+                qdrant.Host, qdrant.GrpcPort, https: false,
+                apiKey: string.IsNullOrWhiteSpace(qdrant.ApiKey) ? null : qdrant.ApiKey,
+                grpcTimeout: Timeout);
+        });
+        services.AddSingleton<IPolicyVectorStore>(sp => new QdrantPolicyVectorStore(
+            sp.GetRequiredService<QdrantClient>(),
+            sp.GetRequiredService<IOptions<PolicyOptions>>().Value.Qdrant.Collection));
+        services.AddHostedService<PolicyIndexingHostedService>();
 
         return services;
     }

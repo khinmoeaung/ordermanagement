@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using Anthropic.Exceptions;
 using Google.GenAI;
+using Grpc.Core;
 using OllamaSharp.Models.Exceptions;
 
 namespace OrderManagement.Infrastructure.Assistant;
@@ -36,6 +37,10 @@ public static class ProviderErrors
 
             case OllamaException:
                 return false;
+
+            // Qdrant talks gRPC: it being down or overloaded is an outage, anything else is a real error.
+            case RpcException rpc:
+                return rpc.StatusCode is StatusCode.Unavailable or StatusCode.DeadlineExceeded or StatusCode.ResourceExhausted;
 
             case HttpRequestException http:
                 return http.StatusCode is null || IsTransientStatus((int)http.StatusCode.Value);

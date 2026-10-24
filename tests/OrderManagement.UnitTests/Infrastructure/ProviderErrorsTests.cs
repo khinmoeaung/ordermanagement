@@ -63,4 +63,18 @@ public class ProviderErrorsTests
     [Fact]
     public void Unknown_exception_is_not_transient() =>
         ProviderErrors.IsTransient(new InvalidOperationException("boom"), NotCancelled).ShouldBeFalse();
+
+    [Theory]
+    [InlineData(Grpc.Core.StatusCode.Unavailable)]
+    [InlineData(Grpc.Core.StatusCode.DeadlineExceeded)]
+    [InlineData(Grpc.Core.StatusCode.ResourceExhausted)]
+    public void Transient_grpc_statuses_are_transient(Grpc.Core.StatusCode status) =>
+        ProviderErrors.IsTransient(new Grpc.Core.RpcException(new Grpc.Core.Status(status, "qdrant")), NotCancelled).ShouldBeTrue();
+
+    [Theory]
+    [InlineData(Grpc.Core.StatusCode.NotFound)]
+    [InlineData(Grpc.Core.StatusCode.InvalidArgument)]
+    [InlineData(Grpc.Core.StatusCode.Unauthenticated)]
+    public void Other_grpc_statuses_are_not_transient(Grpc.Core.StatusCode status) =>
+        ProviderErrors.IsTransient(new Grpc.Core.RpcException(new Grpc.Core.Status(status, "qdrant")), NotCancelled).ShouldBeFalse();
 }
