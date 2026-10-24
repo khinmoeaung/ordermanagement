@@ -33,7 +33,13 @@ public sealed class FakePolicyEmbedder : IPolicyEmbedder
         }
     }
 
-    public Task<float[]> EmbedQueryAsync(string question, CancellationToken ct) => Task.FromResult(VectorFor(question));
+    public List<string> Queries { get; } = [];
+
+    public Task<float[]> EmbedQueryAsync(string question, CancellationToken ct)
+    {
+        Queries.Add(question);
+        return Task.FromResult(VectorFor(question));
+    }
 
     public static float[] VectorFor(string text)
     {
