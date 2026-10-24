@@ -30,6 +30,13 @@ public sealed class GlobalExceptionHandler(
         if (status == StatusCodes.Status500InternalServerError)
             logger.LogError(exception, "Unhandled exception for {Method} {Path}", httpContext.Request.Method, httpContext.Request.Path);
 
+        // Operators need to see an assistant outage or a missing key. Only exception types are logged:
+        // provider messages can echo request content, so the exception object itself is deliberately not passed.
+        if (exception is AssistantNotConfiguredException or AssistantUnavailableException)
+            logger.LogWarning("Assistant unavailable: {ExceptionType} (inner {InnerType}) for {Method} {Path}",
+                exception.GetType().Name, exception.InnerException?.GetType().Name ?? "none",
+                httpContext.Request.Method, httpContext.Request.Path);
+
         httpContext.Response.StatusCode = status;
         return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
         {

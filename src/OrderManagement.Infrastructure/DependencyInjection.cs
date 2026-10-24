@@ -46,7 +46,10 @@ public static class DependencyInjection
             .Bind(configuration.GetSection(AssistantOptions.SectionName))
             .Validate(AssistantOptions.Validate, "Invalid Assistant settings.")
             .ValidateOnStart();
-        services.AddSingleton<IAssistantModel, AnthropicAssistantModel>();
+        services.AddSingleton<ChatClientFactory>();
+        services.AddSingleton<IAssistantModel>(sp => new ChatClientAssistantModel(
+            sp.GetRequiredService<ChatClientFactory>().Create,
+            sp.GetRequiredService<IOptions<AssistantOptions>>().Value.MaxTokens));
         services.AddScoped<IAssistantService>(sp => new AssistantService(
             sp.GetRequiredService<IAssistantModel>(),
             sp.GetRequiredService<ToolExecutor>(),

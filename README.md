@@ -91,9 +91,9 @@ All routes are under `/api/v1`. Errors are RFC 9457 ProblemDetails with a `trace
 
 Order status flow: `Pending -> Confirmed -> Shipped -> Delivered -> Completed`. Cancelling is allowed from `Pending` or `Confirmed` and restores the stock.
 
-## Order assistant (Claude)
+## Order assistant
 
-A signed-in **customer** can ask about their own orders in plain language. Claude (`claude-haiku-5-5` by default, set in `Assistant:Model`) chooses between two read-only tools, and the backend runs them:
+A signed-in **customer** can ask about their own orders in plain language. A model chooses between two read-only tools, and the backend runs them:
 
 - `get_order_status(orderNumber)`: one order's status, dates, total and items
 - `list_my_orders(status?)`: up to 10 recent orders
@@ -106,18 +106,48 @@ Authorization: Bearer <customer access token>
 200 { "reply": "Your order ORD-20261023-AB12CD is Pending ..." }
 ```
 
-**Security model:** whatever Claude puts in a tool call is treated as untrusted input. Every call passes a backend gate that checks the tool allowlist and the strict arguments, then runs the tool as the user in the JWT. The ownership rule is the same one the REST API uses, so asking about another customer's order number returns "Order not found." exactly like a missing order. Only a restricted result reaches Claude, with no internal IDs, prices per line, address or other customers' data.
+**Security model:** whatever the model puts in a tool call is treated as untrusted input. Every call passes a backend gate that checks the tool allowlist and the strict arguments, then runs the tool as the user in the JWT. The ownership rule is the same one the REST API uses, so asking about another customer's order number returns "Order not found." exactly like a missing order. Only a restricted result reaches the model, with no internal IDs, prices per line, address or other customers' data. This holds for every provider below.
 
-**Setup:** set `ANTHROPIC_API_KEY` (in `.env` for Docker, or `dotnet user-secrets set "ANTHROPIC_API_KEY" "<key>" --project src/OrderManagement.Api` locally). Without it the endpoint returns 503 "Assistant is not configured." and the rest of the API works normally. Model and limits are in the `Assistant` section of `appsettings.json`.
+### Choosing a provider
 
-**Manual check with a real key:** log in as a customer who has an order, then
+One provider is active at a time, chosen with `Assistant__Provider` in `.env` (or `Assistant:Provider` in configuration). Switch by changing it, adding that provider's key or endpoint, and running `docker compose up -d`.
+
+| `Assistant__Provider` | Credential | Model setting (default) |
+|---|---|---|
+| `Claude` (default) | `ANTHROPIC_API_KEY` | `Assistant__Claude__Model` (`claude-haiku-5-5`) |
+| `OpenAI` | `OPENAI_API_KEY` | `Assistant__OpenAI__Model` (`gpt-5-mini`) |
+| `Gemini` | `GEMINI_API_KEY` | `Assistant__Gemini__Model` (`gemini-3.5-flash`) |
+| `Ollama` | `Assistant__Ollama__Endpoint` (no key) | `Assistant__Ollama__Model` (`qwen2.5:7b`) |
+
+- **Check the OpenAI and Gemini model names.** Those two defaults were not confirmed against the providers' official model lists. A wrong name makes the provider answer 404, which shows up as a 500 with the cause in the log. Set the setting above to a model from the provider's current list.
+- Without the selected provider's key (or the Ollama endpoint) the endpoint returns 503 "Assistant is not configured." and the rest of the API works normally. A provider outage, timeout or rate limit returns 503 "Assistant is temporarily unavailable."
+- Other settings live in the `Assistant` section of `appsettings.json`: `MaxTokens` (4096) and `MaxToolRounds` (5).
+- Optional overrides, mainly for tests: `ANTHROPIC_BASE_URL`, and `Assistant__OpenAI__Endpoint` (which also lets you point at an OpenAI-compatible server). Anyone who can set configuration can redirect the model traffic with these, and redirecting also sends that provider's API key to the new host. An `http://` address sends the key unencrypted, so use `https://` (loopback addresses are fine for local tests). Treat them as deployment-only settings.
+- Locally, set secrets with `dotnet user-secrets set "OPENAI_API_KEY" "<key>" --project src/OrderManagement.Api`.
+
+**Your data goes to the provider you pick.** With `Claude`, `OpenAI` or `Gemini`, the customer's free-text message, plus the order numbers, dates, status, totals and product names the tools return, are sent to that company's API. Choose accordingly.
+
+### Ollama on another machine
+
+Ollama runs on a separate computer; this project only needs its address.
+
+1. On the Ollama machine, make it listen on the network: set the environment variable `OLLAMA_HOST=0.0.0.0` and restart Ollama.
+2. Allow inbound TCP port **11434** in that machine's firewall (Windows Defender Firewall: new inbound rule).
+3. Pull a model that **supports tool calling**: `ollama pull qwen2.5:7b` (about 8 GB of RAM).
+4. In `.env` set `Assistant__Provider=Ollama` and `Assistant__Ollama__Endpoint=http://<that-machine-IP>:11434`, then `docker compose up -d`.
+
+Each call to Ollama times out after 60 seconds. A cold model load or a slow CPU can exceed that, which shows up as 503 "temporarily unavailable": warm the model first (`ollama run qwen2.5:7b`) or use a smaller one. Ollama has **no authentication**, and the traffic is plain HTTP. Use it only on a network you trust. Small models sometimes send malformed tool arguments or pick the wrong tool; the backend rejects bad arguments and the model retries, so answers can be worse but access is never widened.
+
+### Manual check with a real provider
+
+Log in as a customer who has an order, then:
 
 ```
 curl -s http://localhost:5080/api/v1/assistant/chat -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" -d '{"message":"What are my recent orders?"}'
 ```
 
-The automated tests never call Claude: they use a scripted fake model.
+The automated tests never call a real provider: they use scripted fakes and local stub servers.
 
 ## Troubleshooting
 

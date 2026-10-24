@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
+using OrderManagement.Api.Infrastructure;
 using OrderManagement.Application.Assistant;
 using OrderManagement.Infrastructure.Assistant;
 using OrderManagement.Infrastructure.Persistence;
@@ -32,9 +34,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public ScriptedAssistantModel Assistant { get; } = new();
 
     /// <summary>A factory that uses the real Anthropic adapter (with no API key), for testing the not-configured path.</summary>
-    public WebApplicationFactory<Program> WithRealAssistantModel() =>
-        WithWebHostBuilder(b => b.ConfigureTestServices(s =>
-            s.AddSingleton<IAssistantModel>(sp => ActivatorUtilities.CreateInstance<AnthropicAssistantModel>(sp))));
+    public WebApplicationFactory<Program> WithRealAssistantModel(ILogger<GlobalExceptionHandler>? handlerLogger = null) =>
+        WithWebHostBuilder(b =>
+        {
+            if (handlerLogger is not null) b.ConfigureTestServices(s => s.AddSingleton(handlerLogger));
+            b.ConfigureTestServices(s =>
+                s.AddSingleton<IAssistantModel>(sp => new ChatClientAssistantModel(sp.GetRequiredService<ChatClientFactory>().Create, 4096)));
+        });
 
     public async ValueTask InitializeAsync()
     {
@@ -68,8 +74,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 ["Jwt:SigningKey"] = JwtSigningKey,
                 ["Seed:AdminEmail"] = AdminEmail,
                 ["Seed:AdminPassword"] = AdminPassword,
-                // Never let a developer's real key reach the API from tests.
-                ["ANTHROPIC_API_KEY"] = ""
+                // Environment variables still load in the Testing environment, so a developer's real provider
+                // settings must not reach the API from tests: pin the provider and blank every key and endpoint.
+                ["Assistant:Provider"] = "Claude",
+                ["ANTHROPIC_API_KEY"] = "",
+                ["ANTHROPIC_BASE_URL"] = "",
+                ["OPENAI_API_KEY"] = "",
+                ["GEMINI_API_KEY"] = "",
+                ["Assistant:OpenAI:Endpoint"] = "",
+                ["Assistant:Ollama:Endpoint"] = ""
             });
         });
         builder.ConfigureTestServices(s => s.AddSingleton<IAssistantModel>(Assistant));

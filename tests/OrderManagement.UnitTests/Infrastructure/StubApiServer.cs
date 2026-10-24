@@ -5,14 +5,14 @@ using System.Text.Json;
 
 namespace OrderManagement.UnitTests.Infrastructure;
 
-/// <summary>A local HTTP server standing in for the Messages API: replies from a queue and records request bodies.</summary>
-public sealed class StubAnthropicServer : IDisposable
+/// <summary>A local HTTP server standing in for a provider API: replies from a queue and records request bodies.</summary>
+public sealed class StubApiServer : IDisposable
 {
     private readonly HttpListener _listener = new();
     private readonly Queue<(int Status, string Body)> _responses = new();
     private readonly Task _loop;
 
-    public StubAnthropicServer()
+    public StubApiServer()
     {
         int port = FreePort();
         BaseUrl = $"http://127.0.0.1:{port}";
@@ -26,7 +26,7 @@ public sealed class StubAnthropicServer : IDisposable
     public string? FallbackBody { get; set; }
     public int FallbackStatus { get; set; } = 500;
 
-    public StubAnthropicServer Reply(string body, int status = 200)
+    public StubApiServer Reply(string body, int status = 200)
     {
         lock (_responses) _responses.Enqueue((status, body));
         return this;
@@ -69,6 +69,7 @@ public sealed class StubAnthropicServer : IDisposable
             byte[] bytes = Encoding.UTF8.GetBytes(next.reply);
             ctx.Response.StatusCode = next.status;
             ctx.Response.ContentType = "application/json";
+            if (next.status >= 429) ctx.Response.Headers["retry-after-ms"] = "1";   // keeps SDK retries fast in tests
             ctx.Response.ContentLength64 = bytes.Length;
             await ctx.Response.OutputStream.WriteAsync(bytes);
             ctx.Response.Close();
