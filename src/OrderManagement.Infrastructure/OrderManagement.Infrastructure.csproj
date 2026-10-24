@@ -11,6 +11,10 @@
     <PackageReference Include="Microsoft.Extensions.Identity.Core" />
     <PackageReference Include="dbup-mysql" />
     <PackageReference Include="Anthropic" />
+    <PackageReference Include="Microsoft.Extensions.AI.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
+    <PackageReference Include="Google.GenAI" />
+    <PackageReference Include="OllamaSharp" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
   </ItemGroup>
 

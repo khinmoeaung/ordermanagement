@@ -23,6 +23,10 @@
     <PackageVersion Include="Shouldly" Version="4.3.0" />
     <PackageVersion Include="Testcontainers.MySql" Version="4.16.0" />
     <PackageVersion Include="Anthropic" Version="13.1.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.Abstractions" Version="10.11.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.11.0" />
+    <PackageVersion Include="Google.GenAI" Version="1.27.0" />
+    <PackageVersion Include="OllamaSharp" Version="5.5.0" />
     <PackageVersion Include="dbup-mysql" Version="6.1.0" />
   </ItemGroup>
 </Project>
