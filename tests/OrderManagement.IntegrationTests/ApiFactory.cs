@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
+using OrderManagement.Api.Infrastructure;
 using OrderManagement.Application.Assistant;
 using OrderManagement.Infrastructure.Assistant;
 using OrderManagement.Infrastructure.Persistence;
@@ -32,9 +34,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public ScriptedAssistantModel Assistant { get; } = new();
 
     /// <summary>A factory that uses the real Anthropic adapter (with no API key), for testing the not-configured path.</summary>
-    public WebApplicationFactory<Program> WithRealAssistantModel() =>
-        WithWebHostBuilder(b => b.ConfigureTestServices(s =>
-            s.AddSingleton<IAssistantModel>(sp => new ChatClientAssistantModel(sp.GetRequiredService<ChatClientFactory>().Create, 4096))));
+    public WebApplicationFactory<Program> WithRealAssistantModel(ILogger<GlobalExceptionHandler>? handlerLogger = null) =>
+        WithWebHostBuilder(b =>
+        {
+            if (handlerLogger is not null) b.ConfigureTestServices(s => s.AddSingleton(handlerLogger));
+            b.ConfigureTestServices(s =>
+                s.AddSingleton<IAssistantModel>(sp => new ChatClientAssistantModel(sp.GetRequiredService<ChatClientFactory>().Create, 4096)));
+        });
 
     public async ValueTask InitializeAsync()
     {

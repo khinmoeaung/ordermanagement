@@ -1,6 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using OrderManagement.Api.Infrastructure;
+using Microsoft.Extensions.Logging;
 using OrderManagement.Application.Assistant;
 using OrderManagement.Application.Orders;
 using Shouldly;
@@ -120,5 +125,44 @@ public sealed class AssistantEndpointsTests(ApiFactory factory) : IntegrationTes
 
         await Problem.AssertAsync(response, HttpStatusCode.ServiceUnavailable);
         (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldContain("Assistant is not configured.");
+    }
+
+    private static IEnumerable<CapturedLog> HandlerWarnings(CapturingLoggerProvider logs) =>
+        logs.Entries.Where(e => e.Level == Microsoft.Extensions.Logging.LogLevel.Warning && e.Category.EndsWith("GlobalExceptionHandler"));
+
+    [Fact]
+    public async Task Unavailable_provider_returns_503_and_logs_type_only()
+    {
+        var customer = await Api.RegisterCustomerAsync();
+        var logs = new CapturingLoggerProvider();
+        using var logging = Factory.WithWebHostBuilder(b => b.ConfigureTestServices(s => s.AddSingleton(logs.For<GlobalExceptionHandler>())));
+        using var client = logging.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", customer.Auth.AccessToken);
+        Factory.Assistant.Script(_ => throw new AssistantUnavailableException(new HttpRequestException("inner-secret-detail")));
+
+        var response = await client.PostAsJsonAsync(Url, new ChatRequest("hi"), TestContext.Current.CancellationToken);
+
+        await Problem.AssertAsync(response, HttpStatusCode.ServiceUnavailable);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).ShouldContain("Assistant is temporarily unavailable.");
+
+        var warning = HandlerWarnings(logs).ShouldHaveSingleItem();
+        warning.Message.ShouldContain("AssistantUnavailableException");
+        warning.Message.ShouldContain("HttpRequestException");
+        logs.Entries.ShouldAllBe(e => !e.Message.Contains("inner-secret-detail") && (e.ExceptionText == null || !e.ExceptionText.Contains("inner-secret-detail")));
+    }
+
+    [Fact]
+    public async Task Not_configured_is_logged_at_warning()
+    {
+        var customer = await Api.RegisterCustomerAsync();
+        var logs = new CapturingLoggerProvider();
+        using var realModelFactory = Factory.WithRealAssistantModel(logs.For<GlobalExceptionHandler>());
+        using var client = realModelFactory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new("Bearer", customer.Auth.AccessToken);
+
+        var response = await client.PostAsJsonAsync(Url, new ChatRequest("hi"), TestContext.Current.CancellationToken);
+
+        await Problem.AssertAsync(response, HttpStatusCode.ServiceUnavailable);
+        HandlerWarnings(logs).ShouldHaveSingleItem().Message.ShouldContain("AssistantNotConfiguredException");
     }
 }

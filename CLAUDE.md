@@ -41,17 +41,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Empty 401/403/404 responses also become ProblemDetails through `UseStatusCodePages`. A customer asking for another customer's order gets 404, not 403.
 
-## Assistant (Claude tool calling)
+## Assistant (LLM tool calling)
 
-- `POST /api/v1/assistant/chat` (CustomerOnly). The loop and the gate are in `Application/Assistant` (`AssistantService`, `ToolExecutor`, `Tools/`). The Anthropic SDK is used only in `Infrastructure/Assistant/AnthropicAssistantModel.cs`, behind `IAssistantModel`.
+- `POST /api/v1/assistant/chat` (CustomerOnly). The loop and the gate are in `Application/Assistant` (`AssistantService`, `ToolExecutor`, `Tools/`). Provider SDKs live only in `Infrastructure/Assistant`, behind `IAssistantModel`.
+- **One adapter for every provider:** `ChatClientAssistantModel` implements `IAssistantModel` on `Microsoft.Extensions.AI`'s `IChatClient`. `ChatClientFactory` builds the client for `Assistant:Provider` (`Claude`, `OpenAI`, `Gemini`, `Ollama`) and returns null when that provider has no key or endpoint (the endpoint then answers 503). Tools are sent as declaration-only functions and the client is never wrapped in `FunctionInvokingChatClient`: a tool runs only through `ToolExecutor`.
 - Model input is untrusted. Tools take no user ID, customer ID or role. They call services that read the caller from `ICurrentUser`, and every call goes through `ToolExecutor` (allowlist, then strict input validation, then a restricted DTO). Never return entities or full response DTOs to the model.
 - To add a tool: implement `IAssistantTool` with a JSON schema (`additionalProperties: false`), validate the input with `ToolInput`, return a small result record, register it in `AddApplication()`, and add unit tests plus a cross-customer integration test.
-- The API key comes from the `ANTHROPIC_API_KEY` configuration key. When it's missing, the endpoint returns 503. Settings are in the `Assistant` section.
-- Tests never call Claude. Unit tests use `FakeAssistantModel`, adapter tests use `StubAnthropicServer`, and API tests script `ApiFactory.Assistant` (`ScriptedAssistantModel`).
+- To add a provider: add an `AssistantProvider` value and options section, a `ChatClientFactory` case, a `ProviderErrors` rule for its exception types (put provider-specific types before the generic `HttpRequestException` case: Google's derive from it), and a stub-server test in `ProviderRoundTripTests`.
+- Keys come from configuration/environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`); Ollama uses `Assistant:Ollama:Endpoint`. Settings are in the `Assistant` section. The OpenAI and Gemini default model names are unverified.
+- Tests never call a provider. Unit tests use `FakeAssistantModel` and `ScriptedChatClient`, adapter tests use `StubApiServer` (a local HTTP server, so these unit tests do loopback I/O), and API tests script `ApiFactory.Assistant` (`ScriptedAssistantModel`). To check logging, swap `ILogger<T>` through DI with `CapturingLoggerProvider.For<T>()`: the app logs through Serilog, which ignores providers added to the host.
 
 ## Tests
 
-- Unit tests do no I/O; services run against in-memory fakes in `tests/OrderManagement.UnitTests/Fakes`.
+- Unit tests do no external I/O; services run against in-memory fakes in `tests/OrderManagement.UnitTests/Fakes`. The provider adapter tests are the exception: they use a loopback HTTP stub (`StubApiServer`).
 - Integration tests: `ApiFactory` (a `WebApplicationFactory<Program>`) runs the API in the `Testing` environment against a Testcontainers `mysql:8.4` container (`MySqlFixture`) shared by the `Api` collection. `IntegrationTestBase` empties the tables and re-seeds before every test, so tests must not depend on each other. New API test classes derive from it and take `ApiFactory`; `TestClient` has helpers for registering, logging in and creating data.
 - Development is test-first.
 
