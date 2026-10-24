@@ -34,7 +34,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>A factory that uses the real Anthropic adapter (with no API key), for testing the not-configured path.</summary>
     public WebApplicationFactory<Program> WithRealAssistantModel() =>
         WithWebHostBuilder(b => b.ConfigureTestServices(s =>
-            s.AddSingleton<IAssistantModel>(sp => ActivatorUtilities.CreateInstance<AnthropicAssistantModel>(sp))));
+            s.AddSingleton<IAssistantModel>(sp => new ChatClientAssistantModel(sp.GetRequiredService<ChatClientFactory>().Create, 4096))));
 
     public async ValueTask InitializeAsync()
     {
