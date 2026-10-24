@@ -74,8 +74,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 ["Jwt:SigningKey"] = JwtSigningKey,
                 ["Seed:AdminEmail"] = AdminEmail,
                 ["Seed:AdminPassword"] = AdminPassword,
-                // Never let a developer's real key reach the API from tests.
-                ["ANTHROPIC_API_KEY"] = ""
+                // Environment variables still load in the Testing environment, so a developer's real provider
+                // settings must not reach the API from tests: pin the provider and blank every key and endpoint.
+                ["Assistant:Provider"] = "Claude",
+                ["ANTHROPIC_API_KEY"] = "",
+                ["ANTHROPIC_BASE_URL"] = "",
+                ["OPENAI_API_KEY"] = "",
+                ["GEMINI_API_KEY"] = "",
+                ["Assistant:OpenAI:Endpoint"] = "",
+                ["Assistant:Ollama:Endpoint"] = ""
             });
         });
         builder.ConfigureTestServices(s => s.AddSingleton<IAssistantModel>(Assistant));

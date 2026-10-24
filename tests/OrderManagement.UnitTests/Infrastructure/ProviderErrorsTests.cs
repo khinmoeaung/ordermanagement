@@ -42,6 +42,10 @@ public class ProviderErrorsTests
     }
 
     [Fact]
+    public void Plain_operation_cancelled_without_caller_cancel_is_transient() =>
+        ProviderErrors.IsTransient(new OperationCanceledException(), NotCancelled).ShouldBeTrue();
+
+    [Fact]
     public void Socket_and_io_errors_are_transient()
     {
         ProviderErrors.IsTransient(new SocketException((int)SocketError.ConnectionRefused), NotCancelled).ShouldBeTrue();

@@ -40,11 +40,13 @@ public sealed class AssistantOptions
         AssistantProvider.Claude => Claude.Model,
         AssistantProvider.OpenAI => OpenAI.Model,
         AssistantProvider.Gemini => Gemini.Model,
-        _ => Ollama.Model,
+        AssistantProvider.Ollama => Ollama.Model,
+        _ => throw new InvalidOperationException($"Unknown assistant provider {(int)Provider}."),
     };
 
     public static bool Validate(AssistantOptions o) =>
-        o.MaxTokens > 0
+        Enum.IsDefined(o.Provider)
+        && o.MaxTokens > 0
         && o.MaxToolRounds is >= 1 and <= 10
         && !string.IsNullOrWhiteSpace(o.SelectedModel)
         && IsBlankOrAbsoluteHttpUrl(o.Ollama.Endpoint)

@@ -122,10 +122,10 @@ One provider is active at a time, chosen with `Assistant__Provider` in `.env` (o
 - **Check the OpenAI and Gemini model names.** Those two defaults were not confirmed against the providers' official model lists. A wrong name makes the provider answer 404, which shows up as a 500 with the cause in the log. Set the setting above to a model from the provider's current list.
 - Without the selected provider's key (or the Ollama endpoint) the endpoint returns 503 "Assistant is not configured." and the rest of the API works normally. A provider outage, timeout or rate limit returns 503 "Assistant is temporarily unavailable."
 - Other settings live in the `Assistant` section of `appsettings.json`: `MaxTokens` (4096) and `MaxToolRounds` (5).
-- Optional overrides, mainly for tests: `ANTHROPIC_BASE_URL`, and `Assistant__OpenAI__Endpoint` (which also lets you point at an OpenAI-compatible server). Anyone who can set configuration can redirect the model traffic with these, so treat them as deployment-only settings.
+- Optional overrides, mainly for tests: `ANTHROPIC_BASE_URL`, and `Assistant__OpenAI__Endpoint` (which also lets you point at an OpenAI-compatible server). Anyone who can set configuration can redirect the model traffic with these, and redirecting also sends that provider's API key to the new host. An `http://` address sends the key unencrypted, so use `https://` (loopback addresses are fine for local tests). Treat them as deployment-only settings.
 - Locally, set secrets with `dotnet user-secrets set "OPENAI_API_KEY" "<key>" --project src/OrderManagement.Api`.
 
-**Your data goes to the provider you pick.** With `Claude`, `OpenAI` or `Gemini`, a customer's order status, total and product names are sent to that company's API. Choose accordingly.
+**Your data goes to the provider you pick.** With `Claude`, `OpenAI` or `Gemini`, the customer's free-text message, plus the order numbers, dates, status, totals and product names the tools return, are sent to that company's API. Choose accordingly.
 
 ### Ollama on another machine
 
@@ -136,7 +136,7 @@ Ollama runs on a separate computer; this project only needs its address.
 3. Pull a model that **supports tool calling**: `ollama pull qwen2.5:7b` (about 8 GB of RAM).
 4. In `.env` set `Assistant__Provider=Ollama` and `Assistant__Ollama__Endpoint=http://<that-machine-IP>:11434`, then `docker compose up -d`.
 
-Ollama has **no authentication**, and the traffic is plain HTTP. Use it only on a network you trust. Small models sometimes send malformed tool arguments or pick the wrong tool; the backend rejects bad arguments and the model retries, so answers can be worse but access is never widened.
+Each call to Ollama times out after 60 seconds. A cold model load or a slow CPU can exceed that, which shows up as 503 "temporarily unavailable": warm the model first (`ollama run qwen2.5:7b`) or use a smaller one. Ollama has **no authentication**, and the traffic is plain HTTP. Use it only on a network you trust. Small models sometimes send malformed tool arguments or pick the wrong tool; the backend rejects bad arguments and the model retries, so answers can be worse but access is never widened.
 
 ### Manual check with a real provider
 

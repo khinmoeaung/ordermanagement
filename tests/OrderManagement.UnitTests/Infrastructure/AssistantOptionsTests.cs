@@ -89,6 +89,10 @@ public class AssistantOptionsTests
         Bind("ollama").Provider.ShouldBe(AssistantProvider.Ollama);
 
     [Fact]
+    public void Undefined_numeric_provider_is_invalid() =>
+        AssistantOptions.Validate(new AssistantOptions { Provider = (AssistantProvider)7 }).ShouldBeFalse();
+
+    [Fact]
     public void Unknown_provider_fails_to_bind() =>
         Should.Throw<Exception>(() => Bind("Gemini2"));
 }

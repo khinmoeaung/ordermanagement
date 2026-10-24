@@ -40,7 +40,9 @@ public static class ProviderErrors
             case HttpRequestException http:
                 return http.StatusCode is null || IsTransientStatus((int)http.StatusCode.Value);
 
-            case TaskCanceledException or TimeoutException or IOException or SocketException:
+            // TaskCanceledException derives from OperationCanceledException. A caller cancel returned false above,
+            // so any cancellation left over is a provider-side timeout.
+            case OperationCanceledException or TimeoutException or IOException or SocketException:
                 return true;
         }
 

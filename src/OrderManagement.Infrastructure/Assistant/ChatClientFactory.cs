@@ -21,7 +21,8 @@ public sealed class ChatClientFactory(IOptions<AssistantOptions> options, IConfi
         AssistantProvider.Claude => CreateClaude(),
         AssistantProvider.OpenAI => CreateOpenAI(),
         AssistantProvider.Gemini => CreateGemini(),
-        _ => CreateOllama(),
+        AssistantProvider.Ollama => CreateOllama(),
+        _ => throw new InvalidOperationException($"Unknown assistant provider {(int)_options.Provider}."),
     };
 
     private string? Key(string name) => configuration[name] is { } value && !string.IsNullOrWhiteSpace(value) ? value : null;

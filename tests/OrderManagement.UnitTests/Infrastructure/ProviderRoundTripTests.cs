@@ -209,6 +209,51 @@ public sealed class ProviderRoundTripTests : IDisposable
         await Should.ThrowAsync<AssistantUnavailableException>(() => Start(OllamaAt($"http://127.0.0.1:{closedPort}")));
     }
 
+    // ---- The tool declarations must reach every provider ---------------------------------------------
+
+    private static void ShouldDeclareGetOrderStatus(JsonElement request)
+    {
+        request.TryGetProperty("tools", out JsonElement tools).ShouldBeTrue("the request carried no tools");
+        string text = tools.ToString();
+        text.ShouldContain("get_order_status");
+        text.ShouldContain("orderNumber");
+    }
+
+    [Fact]
+    public async Task Claude_request_declares_the_tool()
+    {
+        _server.Reply(Message("end_turn", Text("hi")));
+        await Start(Claude());
+        ShouldDeclareGetOrderStatus(_server.Requests.Single());
+    }
+
+    [Fact]
+    public async Task OpenAI_request_declares_the_tool()
+    {
+        _server.Reply(OpenAiText("hi"));
+        await Start(OpenAi());
+        ShouldDeclareGetOrderStatus(_server.Requests.Single());
+    }
+
+    [Fact]
+    public async Task Ollama_request_declares_the_tool()
+    {
+        _server.Reply(OllamaDone);
+        await Start(OllamaAt(_server.BaseUrl));
+        ShouldDeclareGetOrderStatus(_server.Requests.Single());
+    }
+
+    [Theory]
+    [InlineData(500)]
+    [InlineData(503)]
+    public async Task Ollama_server_error_becomes_unavailable(int status)
+    {
+        _server.FallbackStatus = status;
+        _server.FallbackBody = """{"error":"server busy"}""";
+        await Should.ThrowAsync<AssistantUnavailableException>(() => Start(OllamaAt(_server.BaseUrl)));
+    }
+
+
     private sealed class SchemaTool : IAssistantTool
     {
         public string Name => "get_order_status";
