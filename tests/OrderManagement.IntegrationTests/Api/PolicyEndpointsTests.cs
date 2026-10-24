@@ -51,7 +51,7 @@ public sealed class PolicyEndpointsTests(ApiFactory factory) : IntegrationTestBa
     public async Task Ask_with_a_customer_token_returns_the_answer_and_citations()
     {
         Factory.Policies.OnAsk = _ => new PolicyAnswer("Yes, while Pending or Confirmed [1].",
-            [new PolicyCitation("cancellation.md", "Cancellation Policy", "Cancellation Policy > When an order can be cancelled", "An order can be cancelled while...")]);
+            [new PolicyCitation(1, "cancellation.md", "Cancellation Policy", "Cancellation Policy > When an order can be cancelled", "An order can be cancelled while...")]);
         var (fakes, client) = await CustomerWithFakesAsync();
         using (fakes) using (client)
         {
@@ -61,6 +61,7 @@ public sealed class PolicyEndpointsTests(ApiFactory factory) : IntegrationTestBa
             var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct)).RootElement;
             body.GetProperty("answer").GetString().ShouldBe("Yes, while Pending or Confirmed [1].");
             var citation = body.GetProperty("citations").EnumerateArray().Single();
+            citation.GetProperty("number").GetInt32().ShouldBe(1);
             citation.GetProperty("source").GetString().ShouldBe("cancellation.md");
             citation.GetProperty("title").GetString().ShouldBe("Cancellation Policy");
             citation.GetProperty("section").GetString().ShouldBe("Cancellation Policy > When an order can be cancelled");

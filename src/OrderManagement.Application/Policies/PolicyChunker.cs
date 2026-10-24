@@ -52,15 +52,22 @@ public static partial class PolicyChunker
 
         string documentTitle = title ?? fallbackTitle;
         var chunks = new List<PolicyChunk>();
+        var occurrences = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach ((string path, string sectionBody) in sections)
         {
             if (sectionBody.Length == 0) continue;
+
+            // Two sections with the same heading path would share an ID and overwrite each other in the store.
+            // The first keeps the plain path; later ones add an occurrence number to the ID key (not to the shown path).
+            int occurrence = occurrences.GetValueOrDefault(path) + 1;
+            occurrences[path] = occurrence;
+            string idKey = occurrence == 1 ? path : $"{path}#{occurrence}";
 
             int part = 0;
             foreach (string partBody in SplitBody(sectionBody, maxChars))
             {
                 string chunkText = path + "\n\n" + partBody;
-                chunks.Add(new PolicyChunk(ChunkId(source, path, part), source, documentTitle, path, part, chunkText, Hash(chunkText)));
+                chunks.Add(new PolicyChunk(ChunkId(source, idKey, part), source, documentTitle, path, part, chunkText, Hash(chunkText)));
                 part++;
             }
         }

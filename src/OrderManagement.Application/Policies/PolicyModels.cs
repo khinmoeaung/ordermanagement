@@ -17,7 +17,8 @@ public sealed record IndexedChunk(PolicyChunk Chunk, string Fingerprint, float[]
 
 public sealed record ReindexResult(int Added, int Updated, int Unchanged, int Deleted, int TotalChunks);
 
-public sealed record PolicyCitation(string Source, string Title, string Section, string Excerpt);
+/// <summary><c>Number</c> is the [n] in the answer text that this citation belongs to.</summary>
+public sealed record PolicyCitation(int Number, string Source, string Title, string Section, string Excerpt);
 
 public sealed record PolicyAnswer(string Answer, IReadOnlyList<PolicyCitation> Citations);
 

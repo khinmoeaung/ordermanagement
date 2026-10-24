@@ -23,14 +23,22 @@ public sealed partial class PolicyQuestionService(
         }
 
         // Citations come from the [n] markers the model used, never from what it claims; unknown numbers are dropped.
+        bool IsValid(int n) => n >= 1 && n <= excerpts.Count;
+        static int Parse(Match m) => int.TryParse(m.Groups[1].ValueSpan, out int n) ? n : 0;
+
         var cited = CitationMarker().Matches(answer)
-            .Select(m => int.TryParse(m.Groups[1].ValueSpan, out int n) ? n : 0)
-            .Where(n => n >= 1 && n <= excerpts.Count)
+            .Select(Parse)
+            .Where(IsValid)
             .Distinct()
             .Order()
-            .Select(n => excerpts[n - 1])
-            .Select(c => new PolicyCitation(c.Source, c.Title, c.HeadingPath, c.Body.Length > ExcerptLength ? c.Body[..ExcerptLength] : c.Body))
+            .Select(n => (Number: n, Chunk: excerpts[n - 1]))
+            .Select(x => new PolicyCitation(
+                x.Number, x.Chunk.Source, x.Chunk.Title, x.Chunk.HeadingPath,
+                x.Chunk.Body.Length > ExcerptLength ? x.Chunk.Body[..ExcerptLength] : x.Chunk.Body))
             .ToList();
+
+        // A marker with no excerpt behind it would point at nothing, so it is removed from the text the client sees.
+        answer = CitationMarkerWithSpace().Replace(answer, m => IsValid(Parse(m)) ? m.Value : "");
 
         logger.LogInformation("Policy question answered with {CitationCount} citations from {ExcerptCount} excerpts", cited.Count, excerpts.Count);
         return new PolicyAnswer(answer, cited);
@@ -38,4 +46,7 @@ public sealed partial class PolicyQuestionService(
 
     [GeneratedRegex(@"\[(\d+)\]")]
     private static partial Regex CitationMarker();
+
+    [GeneratedRegex(@" ?\[(\d+)\]")]
+    private static partial Regex CitationMarkerWithSpace();
 }

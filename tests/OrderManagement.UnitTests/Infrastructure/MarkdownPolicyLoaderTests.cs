@@ -29,8 +29,8 @@ public sealed class MarkdownPolicyLoaderTests : IDisposable
     }
 
     [Fact]
-    public async Task Missing_directory_returns_empty() =>
-        (await new MarkdownPolicyLoader(Path.Combine(_dir, "nope")).LoadAsync(Ct)).ShouldBeEmpty();
+    public async Task Missing_directory_throws_instead_of_looking_empty() =>
+        (await Should.ThrowAsync<DirectoryNotFoundException>(() => new MarkdownPolicyLoader(Path.Combine(_dir, "nope")).LoadAsync(Ct))).Message.ShouldContain("nope");
 
     [Fact]
     public async Task Empty_directory_returns_empty() =>

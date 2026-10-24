@@ -164,7 +164,7 @@ Asking (POST /policies/ask)
            -> BM25 keyword top 8 ----------------- RRF fusion -> top 4 chunks -> LLM (answer + [n] citations)
 ```
 
-The LLM is told to answer only from the numbered excerpts and to say so when they do not contain the answer. Citations are built by the backend from the `[n]` markers in the answer, so a made-up source or number never reaches the response.
+The LLM is told to answer only from the numbered excerpts and to say so when they do not contain the answer. Citations are built by the backend from the `[n]` markers in the answer (each citation carries its `number`), so a made-up source or number never reaches the response: markers with no excerpt behind them are removed from the answer text.
 
 ### Setup
 
@@ -200,7 +200,7 @@ curl -s http://localhost:5080/api/v1/policies/ask -H "Authorization: Bearer <tok
 {
   "answer": "No. An order can only be cancelled while it is Pending or Confirmed. Once it is Shipped, Delivered or Completed it can no longer be cancelled; after delivery you can use the return process in the Refund Policy instead [1].",
   "citations": [
-    { "source": "cancellation.md", "title": "Cancellation Policy",
+    { "number": 1, "source": "cancellation.md", "title": "Cancellation Policy",
       "section": "Cancellation Policy > When an order can be cancelled",
       "excerpt": "An order can be cancelled while its status is **Pending** or **Confirmed**. ..." }
   ]

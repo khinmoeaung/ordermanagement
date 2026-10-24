@@ -123,6 +123,20 @@ public class PolicyChunkerTests
     }
 
     [Fact]
+    public void Repeated_heading_paths_in_one_file_get_distinct_stable_ids()
+    {
+        const string md = "# T\n## Notes\nfirst\n## Notes\nsecond\n";
+
+        var chunks = Chunk(md);
+
+        chunks.Select(c => c.Body).ShouldBe(["first", "second"]);
+        chunks.Select(c => c.HeadingPath).ShouldBe(["T > Notes", "T > Notes"]);
+        chunks.Select(c => c.Id).Distinct().Count().ShouldBe(2);
+        Chunk(md).Select(c => c.Id).ShouldBe(chunks.Select(c => c.Id));   // stable across runs
+        chunks[0].Id.ShouldBe(PolicyChunker.ChunkId("doc.md", "T > Notes", 0));   // the first keeps the plain ID
+    }
+
+    [Fact]
     public void Sibling_headings_do_not_leak_into_each_others_path() =>
         Chunk("# T\n## A\n### A1\nx\n## B\ny\n").Select(c => c.HeadingPath).ShouldBe(["T > A > A1", "T > B"]);
 

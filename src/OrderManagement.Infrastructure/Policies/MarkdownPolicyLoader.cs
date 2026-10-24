@@ -10,7 +10,10 @@ public sealed class MarkdownPolicyLoader(string directory) : IPolicyLoader
 
     public async Task<IReadOnlyList<PolicySourceFile>> LoadAsync(CancellationToken ct)
     {
-        if (!Directory.Exists(_directory)) return [];
+        // A missing folder is a setup mistake (wrong working directory, missing mount), not "no policies":
+        // returning empty would make the indexer delete every stored chunk.
+        if (!Directory.Exists(_directory))
+            throw new DirectoryNotFoundException($"Policy directory not found: {_directory}");
 
         var files = new List<PolicySourceFile>();
         foreach (string path in Directory.EnumerateFiles(_directory, "*.md", SearchOption.TopDirectoryOnly)

@@ -50,6 +50,7 @@ public class PolicyQuestionServiceTests
 
         answer.Answer.ShouldBe("Yes [2].");
         var citation = answer.Citations.Single();
+        citation.Number.ShouldBe(2);   // the [n] in the answer text, so a client can match them
         citation.Source.ShouldBe("shipping.md");
         citation.Title.ShouldBe("Shipping Policy");
         citation.Section.ShouldBe("Shipping > Time");
@@ -72,6 +73,15 @@ public class PolicyQuestionServiceTests
         var answer = await Service(new FakeGenerator("See [0], [9] and [a].")).AskAsync("q", Ct);
 
         answer.Citations.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task Phantom_markers_are_removed_from_the_answer_text_and_real_ones_kept()
+    {
+        var answer = await Service(new FakeGenerator("Refunds take 5 days [2] and more [9] or [0].")).AskAsync("q", Ct);
+
+        answer.Answer.ShouldBe("Refunds take 5 days [2] and more or.");
+        answer.Citations.Single().Number.ShouldBe(2);
     }
 
     [Fact]
