@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 
 using OrderManagement.Application.Assistant;
 using OrderManagement.Application.Common;
+using OrderManagement.Application.Policies;
 using OrderManagement.Domain.Common;
 
 namespace OrderManagement.Api.Infrastructure;
@@ -21,6 +22,9 @@ public sealed class GlobalExceptionHandler(
             AuthenticationFailedException => (StatusCodes.Status401Unauthorized, exception.Message),
             AssistantNotConfiguredException => (StatusCodes.Status503ServiceUnavailable, "Assistant is not configured."),
             AssistantUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Assistant is temporarily unavailable."),
+            PolicySearchNotConfiguredException => (StatusCodes.Status503ServiceUnavailable, "Policy search is not configured."),
+            PolicySearchUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Policy search is temporarily unavailable."),
+            PoliciesNotIndexedException => (StatusCodes.Status503ServiceUnavailable, "Policies have not been indexed yet."),
             NotFoundException => (StatusCodes.Status404NotFound, exception.Message),
             ConflictException => (StatusCodes.Status409Conflict, exception.Message),
             DomainException => (StatusCodes.Status400BadRequest, exception.Message),
@@ -34,6 +38,12 @@ public sealed class GlobalExceptionHandler(
         // provider messages can echo request content, so the exception object itself is deliberately not passed.
         if (exception is AssistantNotConfiguredException or AssistantUnavailableException)
             logger.LogWarning("Assistant unavailable: {ExceptionType} (inner {InnerType}) for {Method} {Path}",
+                exception.GetType().Name, exception.InnerException?.GetType().Name ?? "none",
+                httpContext.Request.Method, httpContext.Request.Path);
+
+        // Same for policy search: an operator needs to see that Qdrant or the embedding host is down or that nothing is indexed.
+        if (exception is PolicySearchNotConfiguredException or PolicySearchUnavailableException or PoliciesNotIndexedException)
+            logger.LogWarning("Policy search unavailable: {ExceptionType} (inner {InnerType}) for {Method} {Path}",
                 exception.GetType().Name, exception.InnerException?.GetType().Name ?? "none",
                 httpContext.Request.Method, httpContext.Request.Path);
 

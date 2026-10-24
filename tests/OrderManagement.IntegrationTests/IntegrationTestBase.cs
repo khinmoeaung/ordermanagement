@@ -19,6 +19,7 @@ public abstract class IntegrationTestBase(ApiFactory factory) : IAsyncLifetime
     public virtual async ValueTask InitializeAsync()
     {
         Factory.Assistant.Reset();
+        Factory.Policies.Reset();
         await Factory.ResetDatabaseAsync(TestContext.Current.CancellationToken);
     }
 

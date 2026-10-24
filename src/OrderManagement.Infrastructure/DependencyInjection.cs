@@ -12,6 +12,7 @@ using OrderManagement.Application.Products;
 using OrderManagement.Infrastructure.Assistant;
 using OrderManagement.Infrastructure.Persistence;
 using OrderManagement.Infrastructure.Persistence.Repositories;
+using OrderManagement.Infrastructure.Policies;
 using OrderManagement.Infrastructure.Security;
 
 namespace OrderManagement.Infrastructure;
@@ -54,6 +55,8 @@ public static class DependencyInjection
             sp.GetRequiredService<IAssistantModel>(),
             sp.GetRequiredService<ToolExecutor>(),
             sp.GetRequiredService<IOptions<AssistantOptions>>().Value.MaxToolRounds));
+
+        services.AddPolicyInfrastructure(configuration);
 
         return services;
     }

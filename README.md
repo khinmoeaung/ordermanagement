@@ -66,7 +66,7 @@ The `Development` environment applies the schema and seeds the data on startup. 
 dotnet test
 ```
 
-Unit tests need nothing. Integration tests start a MySQL container with Testcontainers, so **Docker must be running**.
+Unit tests need nothing. Integration tests start a MySQL container (and, for the policy search tests, a Qdrant container) with Testcontainers, so **Docker must be running**. The first run pulls the images. No test needs Ollama, an LLM key or the internet.
 
 To run a single test or class, target one test project:
 
@@ -87,6 +87,7 @@ All routes are under `/api/v1`. Errors are RFC 9457 ProblemDetails with a `trace
 | Products | `GET /products`, `GET /products/{id}` (public); admin: `POST`, `PUT`, `DELETE` |
 | Orders | `POST /orders`, `GET /orders/my`, `GET /orders/{id}`, `POST /orders/{id}/cancel` and `/complete`; admin: `GET /orders`, `POST /orders/{id}/confirm`, `/ship`, `/deliver` |
 | Assistant | customer: `POST /assistant/chat` (see below) |
+| Policies | any signed-in user: `POST /policies/ask`; admin: `POST /policies/reindex` (see "Policy Q&A") |
 | Health | `GET /health` (no `/api/v1` prefix) |
 
 Order status flow: `Pending -> Confirmed -> Shipped -> Delivered -> Completed`. Cancelling is allowed from `Pending` or `Confirmed` and restores the stock.
@@ -148,6 +149,85 @@ curl -s http://localhost:5080/api/v1/assistant/chat -H "Authorization: Bearer <t
 ```
 
 The automated tests never call a real provider: they use scripted fakes and local stub servers.
+
+## Policy Q&A (RAG)
+
+Any signed-in user can ask about the shop's **cancellation, refund and shipping policies**. The answer comes only from excerpts of the Markdown files in `policies/`, and the response lists the files and sections it used. The feature never reads order data: "can *I* cancel *my* order ORD-123?" is answered with the rule, not with a decision about that order.
+
+```
+Indexing (startup, or POST /policies/reindex)
+  policies/*.md -> split by heading -> embed each chunk (Ollama, Laptop B) -> Qdrant (vectors + text + metadata)
+                                    \-> in-memory BM25 keyword index
+
+Asking (POST /policies/ask)
+  question -> embed (same model) -> Qdrant top 8 \
+           -> BM25 keyword top 8 ----------------- RRF fusion -> top 4 chunks -> LLM (answer + [n] citations)
+```
+
+The LLM is told to answer only from the numbered excerpts and to say so when they do not contain the answer. Citations are built by the backend from the `[n]` markers in the answer, so a made-up source or number never reaches the response.
+
+### Setup
+
+1. **Laptop B (embeddings).** Install Ollama, then `ollama pull qwen3-embedding:0.6b`. Make it listen on the network: set `OLLAMA_HOST=0.0.0.0` before starting it, and allow TCP port 11434 through the firewall. Ollama has **no authentication** and uses plain HTTP, so use it only on a trusted network.
+2. **Laptop A (this project).** In `.env` set `Policies__Embedding__Endpoint=http://<LaptopB-IP>:11434`. Pick the answer LLM with `Assistant__Provider` as for the order assistant (the same key and model settings are used).
+3. `docker compose up --build -d` starts MySQL, **Qdrant** and the API. Qdrant keeps its index in the `qdrant-data` volume, so it survives restarts. Its dashboard is at http://localhost:6333/dashboard (bound to `127.0.0.1`).
+
+Without `Policies__Embedding__Endpoint` the endpoint answers 503 "Policy search is not configured." and the rest of the API works normally.
+
+### Indexing
+
+- The API indexes `policies/` once in the background when it starts (`Development` and `Docker` environments). If Qdrant or Laptop B is down the API still starts and logs a warning; questions answer 503 until an index succeeds.
+- After editing, adding or removing a file in `policies/`, re-index as an admin:
+
+```
+curl -s -X POST http://localhost:5080/api/v1/policies/reindex -H "Authorization: Bearer <admin token>"
+```
+```json
+{ "added": 1, "updated": 2, "unchanged": 27, "deleted": 0, "totalChunks": 30 }
+```
+
+Re-indexing is idempotent. Each chunk has an ID derived from its file, heading path and part, plus a fingerprint of its text and the embedding model. A second run with no edits reports everything `unchanged` and makes no call to Ollama. An edited section is `updated`, a new one `added`, and a removed heading or file is `deleted`. A renamed file is a delete plus an add, never a duplicate. Changing `Policies__Embedding__Model` re-embeds everything. If the new model produces a different vector size, delete the Qdrant collection (or change `Policies__Qdrant__Collection`) and re-index.
+
+To add a policy, create a Markdown file in `policies/` with a `# Title` and `##` sections (levels 1 to 3 split the file; each section needs some text), then re-index. In Docker the folder is mounted read-only from `./policies`.
+
+### Examples
+
+```
+curl -s http://localhost:5080/api/v1/policies/ask -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" -d '{"question":"Can I cancel my order after it has shipped?"}'
+```
+```json
+{
+  "answer": "No. An order can only be cancelled while it is Pending or Confirmed. Once it is Shipped, Delivered or Completed it can no longer be cancelled; after delivery you can use the return process in the Refund Policy instead [1].",
+  "citations": [
+    { "source": "cancellation.md", "title": "Cancellation Policy",
+      "section": "Cancellation Policy > When an order can be cancelled",
+      "excerpt": "An order can be cancelled while its status is **Pending** or **Confirmed**. ..." }
+  ]
+}
+```
+
+A question the policies do not cover gets an honest answer and no citations:
+
+```json
+{ "answer": "The policies I have do not cover gift wrapping. Please contact customer support.", "citations": [] }
+```
+
+A Burmese question is answered in Burmese. Burmese text has no keyword (BM25) matches, so those questions rely on the semantic search alone, which Qwen3-Embedding handles but with less precision.
+
+These answers are samples: the wording is the LLM's and varies. Errors are ProblemDetails: 400 for an empty or over-1000-character question, 401 without a token, 403 on `reindex` for a non-admin, and 503 with "Policy search is not configured.", "Policy search is temporarily unavailable." or "Policies have not been indexed yet."
+
+### Running locally
+
+`dotnet run` needs Qdrant on the machine (`docker compose up -d qdrant`), `Policies__Qdrant__Host=localhost` (the default host is the compose service name `qdrant`), and the working directory must be the repository root so `policies/` resolves. Set the secrets with user-secrets, for example `dotnet user-secrets set "Policies:Embedding:Endpoint" "http://<LaptopB-IP>:11434" --project src/OrderManagement.Api`.
+
+### Privacy
+
+The user's question goes to the embedding host (Laptop B) and, with the matching excerpts, to the LLM provider you chose. Policy files are not secret, but questions can contain personal details: only use providers you trust with that. The API never logs the question, the answer or policy text; it logs counts, durations, chunk IDs and exception type names.
+
+### Tests
+
+`dotnet test` covers the chunker, BM25, rank fusion, indexer, retriever, prompt, citations and endpoints with fakes, and the Qdrant store with a real Qdrant container (Docker needed). Checking real embeddings and a real LLM is a manual step: run the two examples above against your Laptop B and provider.
 
 ## Troubleshooting
 

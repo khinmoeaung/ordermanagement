@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 
 using OrderManagement.Api.Infrastructure;
 using OrderManagement.Application.Assistant;
+using OrderManagement.Application.Policies;
 using OrderManagement.Infrastructure.Assistant;
 using OrderManagement.Infrastructure.Persistence;
 
@@ -32,6 +33,21 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     /// <summary>The fake Claude used by every API test. Reset before each test by <see cref="IntegrationTestBase"/>.</summary>
     public ScriptedAssistantModel Assistant { get; } = new();
+
+    /// <summary>
+    /// Scriptable policy question service and indexer, used only by factories made with <see cref="WithFakePolicies"/>.
+    /// The base factory keeps the real policy services. Reset before each test by <see cref="IntegrationTestBase"/>.
+    /// </summary>
+    public FakePolicyServices Policies { get; } = new();
+
+    /// <summary>A factory whose policy question service and indexer are <see cref="Policies"/>, so no Qdrant or Ollama is needed.</summary>
+    public WebApplicationFactory<Program> WithFakePolicies(ILogger<GlobalExceptionHandler>? handlerLogger = null) =>
+        WithWebHostBuilder(b => b.ConfigureTestServices(s =>
+        {
+            s.AddSingleton<IPolicyQuestionService>(Policies);
+            s.AddSingleton<IPolicyIndexer>(Policies);
+            if (handlerLogger is not null) s.AddSingleton(handlerLogger);
+        }));
 
     /// <summary>A factory that uses the real Anthropic adapter (with no API key), for testing the not-configured path.</summary>
     public WebApplicationFactory<Program> WithRealAssistantModel(ILogger<GlobalExceptionHandler>? handlerLogger = null) =>
@@ -82,7 +98,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 ["OPENAI_API_KEY"] = "",
                 ["GEMINI_API_KEY"] = "",
                 ["Assistant:OpenAI:Endpoint"] = "",
-                ["Assistant:Ollama:Endpoint"] = ""
+                ["Assistant:Ollama:Endpoint"] = "",
+                // Same for policy search: no embedding host and no Qdrant key from a developer's environment.
+                ["Policies:Embedding:Endpoint"] = "",
+                ["Policies:Qdrant:ApiKey"] = ""
             });
         });
         builder.ConfigureTestServices(s => s.AddSingleton<IAssistantModel>(Assistant));

@@ -4,6 +4,7 @@ using OrderManagement.Application.Assistant.Tools;
 using OrderManagement.Application.Auth;
 using OrderManagement.Application.Customers;
 using OrderManagement.Application.Orders;
+using OrderManagement.Application.Policies;
 using OrderManagement.Application.Products;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -27,6 +28,8 @@ public static class DependencyInjection
         // Infrastructure re-registers this with MaxToolRounds from configuration.
         services.AddScoped<IAssistantService>(sp =>
             new AssistantService(sp.GetRequiredService<IAssistantModel>(), sp.GetRequiredService<ToolExecutor>()));
+
+        services.AddPolicies();
         return services;
     }
 }
