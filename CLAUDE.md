@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Dependencies point inwards: `Api -> Application, Infrastructure`; `Infrastructure -> Application, Domain`; `Application -> Domain`. Domain has no package references and never reads the clock (time arrives as `DateTime utcNow`).
 - Application holds services, DTOs, FluentValidation validators and the interfaces (repositories, `IUnitOfWork`, `ICurrentUser`). Infrastructure implements them with EF Core (`MySql.EntityFrameworkCore`), DbUp, JWT and the password hasher.
 - Package versions are central in `Directory.Packages.props`. No AutoMapper, MediatR or FluentAssertions (licensing); mapping is by hand.
-- Config keys: `ConnectionStrings:Default`, `Jwt:*` (signing key at least 32 bytes), `Seed:*`. Secrets come from user-secrets (Development) or `.env` (Docker); `appsettings.json` holds none. `Program.cs` runs DbUp and the seeder only in `Development` and `Docker`; the `Testing` environment leaves that to the tests.
+- Config keys: `ConnectionStrings:Default`, `Jwt:*` (signing key at least 32 bytes), `Seed:*`, `Cors:AllowedOrigins` (empty in base settings; `http://localhost:4200` in Development/Docker; `UseCors` runs before the exception handler so error responses keep their CORS headers). Secrets come from user-secrets (Development) or `.env` (Docker); `appsettings.json` holds none. `Program.cs` runs DbUp and the seeder only in `Development` and `Docker`; the `Testing` environment leaves that to the tests.
 
 ## Database-first rules
 

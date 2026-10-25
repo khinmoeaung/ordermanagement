@@ -23,6 +23,7 @@ builder.Services.AddProblemDetails(options =>
         ctx.ProblemDetails.Extensions["traceId"] = Activity.Current?.Id ?? ctx.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
+builder.Services.AddWebUiCors(builder.Configuration);
 builder.Services.AddJwtAuthentication();
 builder.Services.AddAuthPolicies();
 
@@ -38,6 +39,8 @@ builder.Services.AddHealthChecks().AddDbContextCheck<AppDbContext>();
 var app = builder.Build();
 
 app.UseSerilogRequestLogging();
+// Before the exception handler: it clears headers, so error responses would otherwise lose their CORS headers.
+app.UseCors(CorsSetup.PolicyName);
 app.UseExceptionHandler();
 // Empty 4xx/5xx responses (401/403 from authorization, 404 for unknown routes) become ProblemDetails.
 app.UseStatusCodePages();

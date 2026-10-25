@@ -44,6 +44,7 @@ docker compose up --build
 - API: http://localhost:5080 (Swagger UI at `/swagger`, health at `/health`). Inside the container the app listens on 8080; compose publishes it on host port 5080, bound to `127.0.0.1` only. That binding avoids an older Docker Desktop bug where its IPv6 forwarder accepts `localhost` (`::1`) connections and then resets them (`ERR_CONNECTION_RESET`). To use another port, change `5080` in the `ports` entry of `docker-compose.yml`.
 - The `Docker` environment applies the schema and seeds an admin user (`Seed__AdminEmail` / `Seed__AdminPassword` from `.env`) and 5 sample products.
 - MySQL is published on `127.0.0.1:3308` for database tools such as SQLyog, MySQL Workbench or DBeaver. Log in with `MYSQL_USER` / `MYSQL_PASSWORD` (or `root` / `MYSQL_ROOT_PASSWORD`) from `.env`, database `MYSQL_DATABASE`.
+- CORS: browsers may call the API from the origins in `Cors:AllowedOrigins`. `appsettings.Development.json` and `appsettings.Docker.json` allow `http://localhost:4200` (the Angular dev server); the base settings allow none. To allow another origin, set `Cors__AllowedOrigins__0=https://ui.example.com` in `.env` (an origin has no path, no trailing slash and no wildcard; the app refuses to start otherwise). Bearer tokens only, so cookies are not allowed.
 - `docker compose down -v` stops everything and deletes the database volume.
 
 ## Run locally
